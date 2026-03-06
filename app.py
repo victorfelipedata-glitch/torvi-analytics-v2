@@ -2,17 +2,16 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Configuración de la página (Ancho total y barra lateral abierta)
+# 1. Configuración de la página
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_sidebar_state="expanded")
 
-# 2. CSS SÚPER FUTURISTA (Efectos Neón y Hover)
+# 2. CSS SÚPER FUTURISTA
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
     
-    .main { background-color: #050814; } /* Fondo azul ultra oscuro */
+    .main { background-color: #050814; }
     
-    /* Título Neón Brillante */
     .titulo-futurista {
         font-family: 'Orbitron', sans-serif;
         color: #00f2ff;
@@ -33,7 +32,6 @@ st.markdown("""
         margin-bottom: 40px;
     }
     
-    /* Tarjetas de Métricas con brillo al pasar el mouse */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #0a1128, #000000);
         border: 1px solid #00f2ff;
@@ -48,7 +46,6 @@ st.markdown("""
         box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
     }
     
-    /* Divisores Láser */
     hr { 
         border: 0; 
         height: 2px; 
@@ -69,20 +66,18 @@ sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8
 try:
     df = pd.read_csv(sheet_url)
     
-    # Limpiamos el % del EV+ para que las gráficas no fallen
     if 'EV+' in df.columns and df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-    # 4. CONSOLA DE MANDO (Barra Lateral)
+    # 4. CONSOLA DE MANDO
     st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
     equipo_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
     
-    # Filtrar el dataframe si escribes algo
     if equipo_filtro:
-        df = df[df['PARTIDO'].str.contains(equipo_filtro, case=False, na=False)]
+        df = df[df['PARTIDO'].str.contains(equipo_filtro, case=False, na=False) | df['MERCADO'].str.contains(equipo_filtro, case=False, na=False)]
 
-    # 5. TARJETAS DE MÉTRICAS (KPIs)
+    # 5. TARJETAS DE MÉTRICAS
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         val_max = df['EV+'].max() if not df.empty and 'EV+' in df.columns else 0
@@ -96,16 +91,17 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 6. GRÁFICA CORREGIDA (Horizontal y muy legible)
+    # 6. GRÁFICA CORREGIDA (Aquí estaba el error)
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>📊 ESCÁNER DE VALOR (EV+)</h3>", unsafe_allow_html=True)
-    if not df.empty and 'PARTIDO' in df.columns and 'EV+' in df.columns:
-        fig = px.bar(df, x='EV+', y='PARTIDO', 
+    if not df.empty and 'MERCADO' in df.columns and 'EV+' in df.columns:
+        # Cambiamos y='PARTIDO' por y='MERCADO'
+        fig = px.bar(df, x='EV+', y='MERCADO', 
                      orientation='h',
                      color='EV+',
                      text='EV+',
                      color_continuous_scale="PuBuGn",
                      template="plotly_dark")
-        # Mostrar el porcentaje por fuera de la barra
+        
         fig.update_traces(texttemplate='%{text}%', textposition='outside')
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', 
@@ -113,7 +109,8 @@ try:
             font=dict(family="Orbitron", color="#00f2ff"),
             xaxis_title="Valor Esperado (EV+ %)",
             yaxis_title="",
-            showlegend=False
+            showlegend=False,
+            height=400 # Esto evita que se estire demasiado
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -121,11 +118,10 @@ try:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # 7. EL NUEVO DESGLOSE DE ANÁLISIS (¡Adiós textos cortados!)
+    # 7. DESGLOSE TÁCTICO
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE PICKS</h3>", unsafe_allow_html=True)
     
     if not df.empty:
-        # Creamos un acordeón (expander) por cada partido
         for index, row in df.iterrows():
             partido = row.get('PARTIDO', 'Desconocido')
             mercado = row.get('MERCADO', 'N/A')
@@ -134,7 +130,6 @@ try:
             analisis = row.get('ANALISIS', 'Sin análisis registrado aún.')
             estatus = str(row.get('ESTATUS', ''))
             
-            # Icono dinámico según el estatus
             icon = "🟢" if "Stal" in estatus else "🔥"
             
             with st.expander(f"{icon} {partido}  |  MERCADO: {mercado}  |  CUOTA: {cuota}  |  EV+: {ev}%"):
@@ -164,6 +159,7 @@ except Exception as e:
 # 9. FOOTER DE AUTOR
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
 
 
