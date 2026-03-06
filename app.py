@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 # 1. Configuración de la página
-st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
 
 # 2. Estilo CSS Futurista y Centrado
 st.markdown("""
@@ -21,7 +21,6 @@ st.markdown("""
         padding-top: 20px;
     }
     .subtitulo {
-        font-family: 'sans-serif';
         color: #ffffff;
         font-size: 1.1rem;
         text-align: center;
@@ -46,7 +45,7 @@ st.markdown('<p class="titulo-futurista">GALACTIC BET ANALYTICS</p>', unsafe_all
 st.markdown('<p class="subtitulo">AI-DRIVEN SPORTS FORECASTING PLATFORM</p>', unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# 4. Datos
+# 4. Datos (Tu link corregido)
 sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
 
 try:
@@ -54,7 +53,7 @@ try:
     if df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-    # 5. Métricas (Estatus corregido a EN LÍNEA)
+    # 5. Métricas (ESTATUS EN LÍNEA)
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(label="MÁXIMO EV+ DETECTADO", value=f"{df['EV+'].max()}%", delta="High Value")
@@ -63,20 +62,21 @@ try:
     with col3:
         st.metric(label="ESTATUS", value="EN LÍNEA", delta="Optimal")
 
-    # 6. Gráfico
+    # 6. Gráfico Futurista
     st.markdown("### 📊 ANÁLISIS DE VALOR ESPERADO")
     fig = px.bar(df, x='PARTIDO', y='EV+', color='EV+', text='EV+', template="plotly_dark", color_continuous_scale="GnBu")
     fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color="#00f2ff")
     st.plotly_chart(fig, use_container_width=True)
 
-    # 7. Tabla (Corrección de error de estilo)
+    # 7. Tabla Limpia (Sin matplotlib para evitar errores)
     st.markdown("### 🛰️ PANEL DE CONTROL DE PICKS")
     st.dataframe(df, use_container_width=True)
 
 except Exception as e:
     st.error(f"Error al conectar con los datos: {e}")
 
-# 8. Footer Personalizado
+# 8. Tu Firma Personalizada
 st.markdown("<br><hr>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; opacity: 0.8; color: #00f2ff; font-family: sans-serif;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; opacity: 0.8; color: #00f2ff;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
