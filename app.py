@@ -1,17 +1,27 @@
+# Importo las librerías que necesito para mi dashboard
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Configuración de la página
+# Configuro mi página para que use todo el ancho de la pantalla y abro la barra lateral por defecto
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_sidebar_state="expanded")
 
-# 2. CSS SÚPER FUTURISTA
+# Inyecto mi CSS personalizado para ocultar los botones por defecto y darle mi estilo futurista
 st.markdown("""
     <style>
+    /* 🚫 Oculto el menú de Streamlit, el enlace a GitHub y el header/footer por defecto 🚫 */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden;}
+    /* --------------------------------------------------------- */
+
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
     
+    /* Configuro mi fondo azul ultra oscuro */
     .main { background-color: #050814; }
     
+    /* Diseño de mi título Neón Brillante */
     .titulo-futurista {
         font-family: 'Orbitron', sans-serif;
         color: #00f2ff;
@@ -23,6 +33,8 @@ st.markdown("""
         padding-top: 10px;
         letter-spacing: 2px;
     }
+    
+    /* Diseño de mi subtítulo */
     .subtitulo {
         color: #b3cce6;
         font-family: 'Orbitron', sans-serif;
@@ -32,6 +44,7 @@ st.markdown("""
         margin-bottom: 40px;
     }
     
+    /* Le doy un efecto de brillo y elevación a mis tarjetas de métricas cuando paso el mouse */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #0a1128, #000000);
         border: 1px solid #00f2ff;
@@ -46,6 +59,7 @@ st.markdown("""
         box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
     }
     
+    /* Diseño de mis divisores estilo láser */
     hr { 
         border: 0; 
         height: 2px; 
@@ -56,28 +70,49 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Imprimo mis títulos en la pantalla principal
 st.markdown('<p class="titulo-futurista">GALACTIC BET</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">SISTEMA DE ANÁLISIS EV+ AVANZADO</p>', unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# 3. DATOS DE TU GOOGLE SHEETS
+# ==========================================
+# 🔐 MI SISTEMA DE SEGURIDAD (MURO DE ACCESO)
+# ==========================================
+st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO VIP</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+
+# Pido la clave en mi barra lateral
+mi_clave = st.sidebar.text_input("🔑 Ingresa la clave de acceso:", type="password")
+
+# Verifico si la clave es correcta antes de mostrar mi trabajo
+if mi_clave != "Galacticos2026": # <-- Aquí puedo cambiar mi contraseña cuando quiera
+    st.warning("⚠️ Acceso Restringido. Ingresa la clave secreta en la consola lateral para ver mis picks.")
+    st.stop() # Detengo la ejecución del código aquí si no tienen mi clave
+
+# ==========================================
+# 🚀 MI CÓDIGO PRINCIPAL (Solo visible con clave)
+# ==========================================
+
+# Conecto mi base de datos de Google Sheets
 sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
 
 try:
+    # Descargo mis datos a un DataFrame
     df = pd.read_csv(sheet_url)
     
+    # Limpio el símbolo % de mi columna EV+ para que mis gráficas no fallen
     if 'EV+' in df.columns and df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-    # 4. CONSOLA DE MANDO
-    st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
-    st.sidebar.markdown("---")
-    equipo_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
+    # Agrego mi buscador a la consola lateral
+    st.sidebar.markdown("<br><h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
+    mi_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
     
-    if equipo_filtro:
-        df = df[df['PARTIDO'].str.contains(equipo_filtro, case=False, na=False) | df['MERCADO'].str.contains(equipo_filtro, case=False, na=False)]
+    # Filtro mi tabla si escribo algo en el buscador
+    if mi_filtro:
+        df = df[df['PARTIDO'].str.contains(mi_filtro, case=False, na=False) | df['MERCADO'].str.contains(mi_filtro, case=False, na=False)]
 
-    # 5. TARJETAS DE MÉTRICAS
+    # Creo mis tarjetas de métricas principales (KPIs)
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         val_max = df['EV+'].max() if not df.empty and 'EV+' in df.columns else 0
@@ -91,10 +126,9 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 6. GRÁFICA CORREGIDA (Aquí estaba el error)
+    # Construyo mi gráfica horizontal para escanear el valor de los mercados
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>📊 ESCÁNER DE VALOR (EV+)</h3>", unsafe_allow_html=True)
     if not df.empty and 'MERCADO' in df.columns and 'EV+' in df.columns:
-        # Cambiamos y='PARTIDO' por y='MERCADO'
         fig = px.bar(df, x='EV+', y='MERCADO', 
                      orientation='h',
                      color='EV+',
@@ -102,6 +136,7 @@ try:
                      color_continuous_scale="PuBuGn",
                      template="plotly_dark")
         
+        # Saco el porcentaje afuera de la barra para que se lea mejor
         fig.update_traces(texttemplate='%{text}%', textposition='outside')
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', 
@@ -110,18 +145,19 @@ try:
             xaxis_title="Valor Esperado (EV+ %)",
             yaxis_title="",
             showlegend=False,
-            height=400 # Esto evita que se estire demasiado
+            height=400 # Limito la altura para que no se deforme
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No hay datos para graficar con ese filtro.")
+        st.info("No tengo datos para graficar con ese filtro.")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # 7. DESGLOSE TÁCTICO
-    st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE PICKS</h3>", unsafe_allow_html=True)
+    # Creo mis tarjetas expansibles para el desglose táctico
+    st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE MIS PICKS</h3>", unsafe_allow_html=True)
     
     if not df.empty:
+        # Recorro cada fila de mis datos para armar las tarjetas
         for index, row in df.iterrows():
             partido = row.get('PARTIDO', 'Desconocido')
             mercado = row.get('MERCADO', 'N/A')
@@ -130,35 +166,39 @@ try:
             analisis = row.get('ANALISIS', 'Sin análisis registrado aún.')
             estatus = str(row.get('ESTATUS', ''))
             
+            # Pongo un icono diferente dependiendo de si es Stal o no
             icon = "🟢" if "Stal" in estatus else "🔥"
             
+            # Armo el cuadro desplegable
             with st.expander(f"{icon} {partido}  |  MERCADO: {mercado}  |  CUOTA: {cuota}  |  EV+: {ev}%"):
                 st.markdown(f"""
                 <div style='background-color: #0a1128; padding: 20px; border-left: 4px solid #00f2ff; border-radius: 0 10px 10px 0;'>
-                    <h4 style='color: #bc13fe; margin-top: 0;'>📝 Análisis del Algoritmo:</h4>
+                    <h4 style='color: #bc13fe; margin-top: 0;'>📝 Análisis de mi Algoritmo:</h4>
                     <p style='color: #ffffff; font-size: 1.1rem; line-height: 1.6;'>{analisis}</p>
                 </div>
                 """, unsafe_allow_html=True)
     else:
-        st.warning("No hay picks en el radar en este momento.")
+        st.warning("No tengo picks en el radar en este momento.")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 8. BOTÓN PARA DESCARGAR EL EXCEL
+    # Preparo mi botón para descargar la base de datos en CSV
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
-        label="⬇️ DESCARGAR BASE DE DATOS DE PICKS (CSV)",
+        label="⬇️ DESCARGAR MI BASE DE DATOS DE PICKS (CSV)",
         data=csv,
         file_name='galactic_picks.csv',
         mime='text/csv',
     )
 
 except Exception as e:
-    st.error(f"Error crítico en el sistema central: {e}")
+    # Si algo falla con el Excel, muestro el error aquí
+    st.error(f"Error crítico en mi sistema central: {e}")
 
-# 9. FOOTER DE AUTOR
+# Pongo mi firma en el pie de página
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
 
 
