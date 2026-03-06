@@ -87,7 +87,7 @@ with col_centro:
     mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
 
 # Verifico si la clave es correcta antes de mostrar mi trabajo
-if mi_clave != "Galacticos2026": # <-- Aquí tu clave
+if mi_clave != "Prueba2026": # <-- Aquí tu clave
     with col_centro:
         if mi_clave: # Si escribieron algo y está mal, les aviso
             st.error("❌ Clave incorrecta. Sistema bloqueado.")
@@ -180,6 +180,7 @@ except Exception as e:
 # Pie de página
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
 
 
