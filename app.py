@@ -75,32 +75,37 @@ st.markdown('<p class="subtitulo">SISTEMA DE ANÁLISIS EV+ AVANZADO</p>', unsafe
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 MI SISTEMA DE SEGURIDAD (EN EL CENTRO)
+# 🔐 MI SISTEMA DE SEGURIDAD (CON MEMORIA INTELIGENTE)
 # ==========================================
 
-# Centro mi formulario de acceso para que se vea como una bóveda
-col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
+# Creo una memoria en el sistema para recordar si ya puse la clave
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
 
-with col_centro:
-    st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO RESTRINGIDO</h3>", unsafe_allow_html=True)
+# Si NO estoy autenticado, muestro la bóveda de acceso
+if not st.session_state['autenticado']:
+    col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
     
-    # Creo un formulario con botón para eliminar el texto encimado de "Press Enter"
-    with st.form("formulario_acceso"):
-        mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
-        # Pongo un botón gigante para entrar
-        boton_entrar = st.form_submit_button("🚀 ENTRAR AL SISTEMA", use_container_width=True)
-
-# Verifico si la clave que metieron coincide con la de mi bóveda secreta de Streamlit
-if mi_clave != st.secrets["password_vip"]: 
     with col_centro:
-        if boton_entrar: # Si le dieron al botón y la clave está mal, marco error
-            st.error("❌ Clave incorrecta. Sistema bloqueado.")
-        else: # Mensaje normal de espera
-            st.info("Esperando autorización del servidor central...")
-    st.stop() # Detengo la ejecución del código aquí para proteger mis datos
+        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO RESTRINGIDO</h3>", unsafe_allow_html=True)
+        
+        with st.form("formulario_acceso"):
+            mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
+            boton_entrar = st.form_submit_button("🚀 ENTRAR AL SISTEMA", use_container_width=True)
+        
+        # Si presiono el botón, verifico la clave con mis secretos
+        if boton_entrar:
+            if mi_clave == st.secrets["password_vip"]:
+                st.session_state['autenticado'] = True
+                st.rerun() # Recargo la página de inmediato, pero ahora estando autenticado
+            else:
+                st.error("❌ Clave incorrecta. Sistema bloqueado.")
+    
+    # Detengo el código aquí para que no se vea nada más si no han puesto la clave
+    st.stop() 
 
 # ==========================================
-# 🚀 MI CÓDIGO PRINCIPAL (Solo visible con clave correcta)
+# 🚀 MI CÓDIGO PRINCIPAL (Solo se carga si el acceso fue exitoso)
 # ==========================================
 
 # Conecto mi base de datos de Google Sheets
@@ -185,3 +190,4 @@ except Exception as e:
 # Pie de página final
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
