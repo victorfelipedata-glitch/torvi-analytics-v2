@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Configuración de la página
+# 1. Configuración básica
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
 
-# 2. Estilo CSS Futurista y Centrado
+# 2. CSS Futurista Centrado
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
@@ -40,43 +40,45 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Encabezado
+# 3. Títulos
 st.markdown('<p class="titulo-futurista">GALACTIC BET ANALYTICS</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">AI-DRIVEN SPORTS FORECASTING PLATFORM</p>', unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# 4. Datos (Tu link corregido)
+# 4. Datos de tu Google Sheets
 sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
 
 try:
     df = pd.read_csv(sheet_url)
+    
+    # Convertir EV+ a número por si acaso
     if df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
     # 5. Métricas (ESTATUS EN LÍNEA)
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric(label="MÁXIMO EV+ DETECTADO", value=f"{df['EV+'].max()}%", delta="High Value")
+        st.metric(label="MÁXIMO EV+", value=f"{df['EV+'].max()}%")
     with col2:
-        st.metric(label="PARTIDOS EN RADAR", value=len(df), delta="Activos")
+        st.metric(label="PARTIDOS", value=len(df))
     with col3:
-        st.metric(label="ESTATUS", value="EN LÍNEA", delta="Optimal")
+        st.metric(label="ESTATUS", value="EN LÍNEA")
 
-    # 6. Gráfico Futurista
-    st.markdown("### 📊 ANÁLISIS DE VALOR ESPERADO")
-    fig = px.bar(df, x='PARTIDO', y='EV+', color='EV+', text='EV+', template="plotly_dark", color_continuous_scale="GnBu")
-    fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color="#00f2ff")
+    # 6. Gráfico
+    st.markdown("### 📊 RADAR DE VALOR")
+    fig = px.bar(df, x='PARTIDO', y='EV+', color='EV+', template="plotly_dark")
     st.plotly_chart(fig, use_container_width=True)
 
-    # 7. Tabla Limpia (Sin matplotlib para evitar errores)
-    st.markdown("### 🛰️ PANEL DE CONTROL DE PICKS")
+    # 7. Tabla Simple
+    st.markdown("### 🛰️ PANEL DE CONTROL")
     st.dataframe(df, use_container_width=True)
 
 except Exception as e:
-    st.error(f"Error al conectar con los datos: {e}")
+    st.error(f"Error de conexión: {e}")
 
-# 8. Tu Firma Personalizada
+# 8. Tu Firma
 st.markdown("<br><hr>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; opacity: 0.8; color: #00f2ff;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #00f2ff;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
 
