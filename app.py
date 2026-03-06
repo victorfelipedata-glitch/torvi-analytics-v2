@@ -3,16 +3,16 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Configuro mi página para que use todo el ancho de la pantalla y abro la barra lateral por defecto
-st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_sidebar_state="expanded")
+# Configuro mi página para que use todo el ancho de la pantalla
+st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
 
 # Inyecto mi CSS personalizado para ocultar los botones por defecto y darle mi estilo futurista
 st.markdown("""
     <style>
-    /* 🚫 Oculto el menú de Streamlit y el footer por defecto, PERO DEJO EL HEADER PARA VER LA FLECHITA 🚫 */
+    /* 🚫 Oculto el menú de Streamlit, el header y el footer por completo 🚫 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    [data-testid="stToolbar"] {visibility: hidden;}
+    header {visibility: hidden;}
     /* --------------------------------------------------------- */
 
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
@@ -43,7 +43,7 @@ st.markdown("""
         margin-bottom: 40px;
     }
     
-    /* Le doy un efecto de brillo y elevación a mis tarjetas de métricas cuando paso el mouse */
+    /* Le doy un efecto de brillo y elevación a mis tarjetas de métricas */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #0a1128, #000000);
         border: 1px solid #00f2ff;
@@ -75,18 +75,25 @@ st.markdown('<p class="subtitulo">SISTEMA DE ANÁLISIS EV+ AVANZADO</p>', unsafe
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 MI SISTEMA DE SEGURIDAD (MURO DE ACCESO)
+# 🔐 MI SISTEMA DE SEGURIDAD (EN EL CENTRO)
 # ==========================================
-st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO VIP</h2>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
 
-# Pido la clave en mi barra lateral
-mi_clave = st.sidebar.text_input("🔑 Ingresa la clave de acceso:", type="password")
+# Centro el input de la contraseña para que se vea increíble
+col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
+
+with col_centro:
+    st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO RESTRINGIDO</h3>", unsafe_allow_html=True)
+    # Pido la clave directamente en el centro de la pantalla
+    mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
 
 # Verifico si la clave es correcta antes de mostrar mi trabajo
-if mi_clave != "Galacticos2026": # <-- Aquí puedo cambiar mi contraseña cuando quiera
-    st.warning("⚠️ Acceso Restringido. Haz clic en la flechita '>' arriba a la izquierda para abrir la consola e ingresar la clave secreta.")
-    st.stop() # Detengo la ejecución del código aquí si no tienen mi clave
+if mi_clave != "Galacticos2026": # <-- Aquí tu clave
+    with col_centro:
+        if mi_clave: # Si escribieron algo y está mal, les aviso
+            st.error("❌ Clave incorrecta. Sistema bloqueado.")
+        else: # Si está vacío, solo pido la clave
+            st.info("Esperando autorización del servidor central...")
+    st.stop() # Detengo la ejecución del código aquí
 
 # ==========================================
 # 🚀 MI CÓDIGO PRINCIPAL (Solo visible con clave)
@@ -96,22 +103,19 @@ if mi_clave != "Galacticos2026": # <-- Aquí puedo cambiar mi contraseña cuando
 sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
 
 try:
-    # Descargo mis datos a un DataFrame
     df = pd.read_csv(sheet_url)
     
-    # Limpio el símbolo % de mi columna EV+ para que mis gráficas no fallen
     if 'EV+' in df.columns and df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-    # Agrego mi buscador a la consola lateral
-    st.sidebar.markdown("<br><h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
+    # Agrego mi buscador (ahora sí en la consola lateral, que solo aparece si entras)
+    st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
     mi_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
     
-    # Filtro mi tabla si escribo algo en el buscador
     if mi_filtro:
         df = df[df['PARTIDO'].str.contains(mi_filtro, case=False, na=False) | df['MERCADO'].str.contains(mi_filtro, case=False, na=False)]
 
-    # Creo mis tarjetas de métricas principales (KPIs)
+    # Creo mis tarjetas de métricas
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         val_max = df['EV+'].max() if not df.empty and 'EV+' in df.columns else 0
@@ -125,38 +129,25 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Construyo mi gráfica horizontal para escanear el valor de los mercados
+    # Gráfica horizontal
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>📊 ESCÁNER DE VALOR (EV+)</h3>", unsafe_allow_html=True)
     if not df.empty and 'MERCADO' in df.columns and 'EV+' in df.columns:
         fig = px.bar(df, x='EV+', y='MERCADO', 
-                     orientation='h',
-                     color='EV+',
-                     text='EV+',
-                     color_continuous_scale="PuBuGn",
-                     template="plotly_dark")
-        
-        # Saco el porcentaje afuera de la barra para que se lea mejor
+                     orientation='h', color='EV+', text='EV+',
+                     color_continuous_scale="PuBuGn", template="plotly_dark")
         fig.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)',
+        fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
             font=dict(family="Orbitron", color="#00f2ff"),
-            xaxis_title="Valor Esperado (EV+ %)",
-            yaxis_title="",
-            showlegend=False,
-            height=400 # Limito la altura para que no se deforme
-        )
+            xaxis_title="Valor Esperado (EV+ %)", yaxis_title="", showlegend=False, height=400)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No tengo datos para graficar con ese filtro.")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # Creo mis tarjetas expansibles para el desglose táctico
+    # Desglose Táctico
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE MIS PICKS</h3>", unsafe_allow_html=True)
-    
     if not df.empty:
-        # Recorro cada fila de mis datos para armar las tarjetas
         for index, row in df.iterrows():
             partido = row.get('PARTIDO', 'Desconocido')
             mercado = row.get('MERCADO', 'N/A')
@@ -165,10 +156,8 @@ try:
             analisis = row.get('ANALISIS', 'Sin análisis registrado aún.')
             estatus = str(row.get('ESTATUS', ''))
             
-            # Pongo un icono diferente dependiendo de si es Stal o no
             icon = "🟢" if "Stal" in estatus else "🔥"
             
-            # Armo el cuadro desplegable
             with st.expander(f"{icon} {partido}  |  MERCADO: {mercado}  |  CUOTA: {cuota}  |  EV+: {ev}%"):
                 st.markdown(f"""
                 <div style='background-color: #0a1128; padding: 20px; border-left: 4px solid #00f2ff; border-radius: 0 10px 10px 0;'>
@@ -181,20 +170,14 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Preparo mi botón para descargar la base de datos en CSV
+    # Botón de descarga
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="⬇️ DESCARGAR MI BASE DE DATOS DE PICKS (CSV)",
-        data=csv,
-        file_name='galactic_picks.csv',
-        mime='text/csv',
-    )
+    st.download_button(label="⬇️ DESCARGAR MI BASE DE DATOS DE PICKS (CSV)", data=csv, file_name='galactic_picks.csv', mime='text/csv')
 
 except Exception as e:
-    # Si algo falla con el Excel, muestro el error aquí
     st.error(f"Error crítico en mi sistema central: {e}")
 
-# Pongo mi firma en el pie de página
+# Pie de página
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
 
