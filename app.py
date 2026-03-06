@@ -185,9 +185,13 @@ try:
     st.download_button(label="⬇️ DESCARGAR MI BASE DE DATOS DE PICKS (CSV)", data=csv, file_name='galactic_picks.csv', mime='text/csv')
 
 except Exception as e:
-    st.error(f"Error crítico en mi sistema central: {e}")
+    # 1. Este es el mensaje elegante que verá el usuario si algo se rompe
+    st.warning("🛠️ **SISTEMA EN MANTENIMIENTO**")
+    st.info("Nuestros algoritmos están siendo calibrados. Por favor, regresa en unos minutos.")
+    
+    # 2. Este es el error real que se enviará en secreto a tu consola de desarrollador
+    print(f"⚠️ REPORTE DE ERROR PARA TORVI: {str(e)}")
 
 # Pie de página final
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
-
