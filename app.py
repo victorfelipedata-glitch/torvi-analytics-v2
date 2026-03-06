@@ -78,25 +78,29 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # 🔐 MI SISTEMA DE SEGURIDAD (EN EL CENTRO)
 # ==========================================
 
-# Centro el input de la contraseña para que se vea increíble
+# Centro mi formulario de acceso para que se vea como una bóveda
 col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
 
 with col_centro:
     st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO RESTRINGIDO</h3>", unsafe_allow_html=True)
-    # Pido la clave directamente en el centro de la pantalla
-    mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
+    
+    # Creo un formulario con botón para eliminar el texto encimado de "Press Enter"
+    with st.form("formulario_acceso"):
+        mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password", help="Contacta a Torvi Analytics para obtener acceso.")
+        # Pongo un botón gigante para entrar
+        boton_entrar = st.form_submit_button("🚀 ENTRAR AL SISTEMA", use_container_width=True)
 
-# Verifico si la clave es correcta antes de mostrar mi trabajo
-if mi_clave != "Prueba2026": # <-- Aquí tu clave
+# Verifico si la clave que metieron coincide con la de mi bóveda secreta de Streamlit
+if mi_clave != st.secrets["password_vip"]: 
     with col_centro:
-        if mi_clave: # Si escribieron algo y está mal, les aviso
+        if boton_entrar: # Si le dieron al botón y la clave está mal, marco error
             st.error("❌ Clave incorrecta. Sistema bloqueado.")
-        else: # Si está vacío, solo pido la clave
+        else: # Mensaje normal de espera
             st.info("Esperando autorización del servidor central...")
-    st.stop() # Detengo la ejecución del código aquí
+    st.stop() # Detengo la ejecución del código aquí para proteger mis datos
 
 # ==========================================
-# 🚀 MI CÓDIGO PRINCIPAL (Solo visible con clave)
+# 🚀 MI CÓDIGO PRINCIPAL (Solo visible con clave correcta)
 # ==========================================
 
 # Conecto mi base de datos de Google Sheets
@@ -105,10 +109,11 @@ sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8
 try:
     df = pd.read_csv(sheet_url)
     
+    # Limpio el símbolo de porcentaje si existe
     if 'EV+' in df.columns and df['EV+'].dtype == 'object':
         df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-    # Agrego mi buscador (ahora sí en la consola lateral, que solo aparece si entras)
+    # Activo mi consola lateral para buscar partidos
     st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
     mi_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
     
@@ -129,7 +134,7 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Gráfica horizontal
+    # Construyo mi gráfica horizontal
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>📊 ESCÁNER DE VALOR (EV+)</h3>", unsafe_allow_html=True)
     if not df.empty and 'MERCADO' in df.columns and 'EV+' in df.columns:
         fig = px.bar(df, x='EV+', y='MERCADO', 
@@ -145,7 +150,7 @@ try:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # Desglose Táctico
+    # Creo mis expansores de desglose táctico
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE MIS PICKS</h3>", unsafe_allow_html=True)
     if not df.empty:
         for index, row in df.iterrows():
@@ -170,22 +175,13 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Botón de descarga
+    # Preparo el botón de descarga
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(label="⬇️ DESCARGAR MI BASE DE DATOS DE PICKS (CSV)", data=csv, file_name='galactic_picks.csv', mime='text/csv')
 
 except Exception as e:
     st.error(f"Error crítico en mi sistema central: {e}")
 
-# Pie de página
+# Pie de página final
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
-
-
-
-
-
-
-
-
-
