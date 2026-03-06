@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import time # <-- Nueva librería para romper la caché de Google
 
 # Configuro mi página para que use todo el ancho de la pantalla
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
@@ -93,7 +94,8 @@ if not st.session_state['autenticado']:
 # ==========================================
 # 🚀 MI CÓDIGO PRINCIPAL
 # ==========================================
-sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
+# Agrego el rompe-caché con time.time() para forzar datos en vivo
+sheet_url = f"https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv&_={int(time.time())}"
 
 try:
     df = pd.read_csv(sheet_url)
@@ -134,13 +136,11 @@ try:
         # Analizo los estatus sin importar mayúsculas
         estatus_limpio = df['ESTATUS'].astype(str).str.lower()
         
-        # Filtro ganadas y perdidas usando palabras clave
-        ganadas = df[estatus_limpio.str.contains('ganado|verde|win|acierto', na=False)]
-        perdidas = df[estatus_limpio.str.contains('perdido|rojo|loss|fallo', na=False)]
-        pendientes = df[~estatus_limpio.str.contains('ganado|verde|win|acierto|perdido|rojo|loss|fallo', na=False)]
+        # Filtro ganadas y perdidas usando variaciones para atrapar "ganada" y "perdida"
+        ganadas = df[estatus_limpio.str.contains('ganad|verde|win|aciert', na=False, regex=True)]
+        perdidas = df[estatus_limpio.str.contains('perdid|rojo|loss|fall', na=False, regex=True)]
         
         # Matemáticas de apuestas
-        # Ganancia neta de una apuesta = Stake * (Cuota - 1)
         ganancia_bruta = sum(stake_base * (float(cuota) - 1) for cuota in ganadas['CUOTA CASA'] if pd.notna(cuota))
         perdida_total = stake_base * len(perdidas)
         profit_neto = ganancia_bruta - perdida_total
@@ -173,11 +173,14 @@ try:
             xaxis_title="Valor Esperado (EV+ %)", yaxis_title="", showlegend=False, height=350)
         st.plotly_chart(fig, use_container_width=True)
 
-    # 4. TABLA PRINCIPAL CRUDA
+    # 4. TABLA PRINCIPAL CRUDA (Sin la columna de Análisis)
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🛰️ BASE DE DATOS MAESTRA</h3>", unsafe_allow_html=True)
-    st.dataframe(df, use_container_width=True, height=250)
+    
+    # Creo una copia de la tabla y le borro la columna ANALISIS solo para esta vista
+    df_mostrar = df.drop(columns=['ANALISIS']) if 'ANALISIS' in df.columns else df
+    st.dataframe(df_mostrar, use_container_width=True, height=250)
 
-    # 5. DESGLOSE TÁCTICO EXPANSIBLE
+    # 5. DESGLOSE TÁCTICO EXPANSIBLE (Aquí sí vive el Análisis)
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE PICKS</h3>", unsafe_allow_html=True)
     if not df.empty:
         for index, row in df.iterrows():
@@ -189,8 +192,8 @@ try:
             estatus = str(row.get('ESTATUS', '')).upper()
             
             # Icono según resultado
-            if any(palabra in estatus for palabra in ['GANADO', 'VERDE', 'WIN']): icon = "✅"
-            elif any(palabra in estatus for palabra in ['PERDIDO', 'ROJO', 'LOSS']): icon = "❌"
+            if any(palabra in estatus for palabra in ['GANAD', 'VERDE', 'WIN']): icon = "✅"
+            elif any(palabra in estatus for palabra in ['PERDID', 'ROJO', 'LOSS']): icon = "❌"
             else: icon = "⏳"
             
             with st.expander(f"{icon} {partido}  |  MERCADO: {mercado}  |  CUOTA: {cuota}  |  ESTATUS: {estatus}"):
@@ -211,4 +214,5 @@ except Exception as e:
 
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
