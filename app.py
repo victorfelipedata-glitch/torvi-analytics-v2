@@ -11,16 +11,25 @@ from firebase_admin import credentials, firestore
 # Configuro mi página
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
 
-# CSS para ocultar botones por defecto
+# ==========================================
+# 🎨 CSS SÚPER FUTURISTA (GLASSMORPHISM & ESPACIO)
+# ==========================================
 st.markdown("""
     <style>
+    /* 🚫 Oculto el menú de Streamlit, el header y el footer por completo 🚫 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
-    .main { background-color: #050814; }
     
+    /* 🌌 FONDO ESPACIAL PROFUNDO (Sustituye al negro plano) */
+    .stApp { 
+        background: radial-gradient(circle at 50% 0%, #1a0b2e 0%, #050814 50%, #000000 100%);
+        background-attachment: fixed;
+    }
+    
+    /* Títulos */
     .titulo-futurista {
         font-family: 'Orbitron', sans-serif; color: #00f2ff;
         text-shadow: 0 0 5px #00f2ff, 0 0 15px #00f2ff, 0 0 30px #008cff;
@@ -30,21 +39,54 @@ st.markdown("""
         color: #b3cce6; font-family: 'Orbitron', sans-serif; font-size: 1.2rem;
         text-align: center; letter-spacing: 4px; margin-bottom: 40px;
     }
+    
+    /* 🪟 EFECTO CRISTAL PARA FORMULARIOS (Glassmorphism) */
+    [data-testid="stForm"] {
+        background: rgba(10, 17, 40, 0.4);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(0, 242, 255, 0.2);
+        border-radius: 15px;
+        padding: 30px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    /* ⌨️ ESTILO PARA LAS CAJAS DE TEXTO (Inputs) */
+    .stTextInput input {
+        background-color: rgba(0, 0, 0, 0.6) !important;
+        color: #00f2ff !important;
+        border: 1px solid rgba(188, 19, 254, 0.5) !important;
+        border-radius: 8px;
+    }
+    .stTextInput input:focus {
+        border: 1px solid #00f2ff !important;
+        box-shadow: 0 0 10px rgba(0, 242, 255, 0.5) !important;
+    }
+
+    /* 🔵 TARJETAS DE MÉTRICAS */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #0a1128, #000000); border: 1px solid #00f2ff;
+        background: rgba(10, 17, 40, 0.6);
+        backdrop-filter: blur(10px);
+        border: 1px solid #00f2ff;
         border-radius: 10px; padding: 20px; text-align: center;
         box-shadow: 0 0 10px rgba(0, 242, 255, 0.1); transition: transform 0.3s ease;
     }
     div[data-testid="stMetric"]:hover {
         transform: translateY(-5px); box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
     }
+    
+    /* Líneas divisorias láser */
     hr { border: 0; height: 2px; background: linear-gradient(90deg, transparent, #00f2ff, #bc13fe, transparent); margin: 30px 0; }
     
-    div.stButton > button:first-child {
-        background-color: #0a1128; color: #00f2ff; border: 1px solid #00f2ff; font-family: 'Orbitron', sans-serif;
+    /* 🚀 BOTONES PRINCIPALES */
+    div.stButton > button:first-child, div.stFormSubmitButton > button:first-child {
+        background: linear-gradient(90deg, #0a1128, #1a0b2e);
+        color: #00f2ff; border: 1px solid #00f2ff; font-family: 'Orbitron', sans-serif;
+        border-radius: 8px; font-weight: bold; transition: all 0.3s ease;
     }
-    div.stButton > button:first-child:hover {
-        background-color: #00f2ff; color: #050814; box-shadow: 0 0 15px #00f2ff;
+    div.stButton > button:first-child:hover, div.stFormSubmitButton > button:first-child:hover {
+        background: linear-gradient(90deg, #00f2ff, #bc13fe);
+        color: #050814; border: 1px solid #ffffff; box-shadow: 0 0 20px rgba(0, 242, 255, 0.8);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -56,17 +98,13 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # ==========================================
 # 🔗 CONEXIÓN A MI BASE DE DATOS FIREBASE
 # ==========================================
-# Verifico si ya me conecté a Firebase para no conectarme dos veces y causar un error
 if not firebase_admin._apps:
-    # Leo mi llave secreta de la bóveda de Streamlit y la convierto a diccionario
     dict_claves = json.loads(st.secrets["firebase_key"])
     cred = credentials.Certificate(dict_claves)
     firebase_admin.initialize_app(cred)
 
-# Abro el canal de comunicación con Firestore
 db = firestore.client()
 
-# Función para encriptar contraseñas (NUNCA guardo contraseñas en texto plano)
 def encriptar_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -79,29 +117,26 @@ if 'autenticado' not in st.session_state:
 if not st.session_state['autenticado']:
     col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
     with col_centro:
-        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 TERMINAL DE ACCESO</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe; margin-bottom: 20px;'>🔐 TERMINAL DE ACCESO</h3>", unsafe_allow_html=True)
         
-        # Creo dos pestañas para separar Login y Registro
         tab_login, tab_registro = st.tabs(["🚀 INICIAR SESIÓN", "📝 REGISTRARSE"])
         
         with tab_login:
             with st.form("form_login"):
                 correo_login = st.text_input("📧 Correo Electrónico:")
                 pass_login = st.text_input("🔑 Contraseña:", type="password")
+                st.markdown("<br>", unsafe_allow_html=True)
                 btn_login = st.form_submit_button("ENTRAR AL SISTEMA", use_container_width=True)
                 
                 if btn_login:
                     if correo_login and pass_login:
-                        # Busco el documento del usuario en mi colección de Firebase
                         usuario_ref = db.collection('usuarios').document(correo_login).get()
-                        
-                        if usuario_ref.exists: # Si el usuario existe, verifico la contraseña
+                        if usuario_ref.exists:
                             datos_usuario = usuario_ref.to_dict()
                             pass_encriptada = encriptar_password(pass_login)
-                            
                             if datos_usuario['password'] == pass_encriptada:
                                 st.session_state['autenticado'] = True
-                                st.rerun() # Acceso concedido, recargo la página
+                                st.rerun()
                             else:
                                 st.error("❌ Contraseña incorrecta.")
                         else:
@@ -115,20 +150,19 @@ if not st.session_state['autenticado']:
                 correo_nuevo = st.text_input("📧 Correo Electrónico:")
                 pass_nueva = st.text_input("🔑 Crea una Contraseña:", type="password")
                 pass_confirmar = st.text_input("🔑 Confirma tu Contraseña:", type="password")
+                st.markdown("<br>", unsafe_allow_html=True)
                 btn_registro = st.form_submit_button("CREAR CUENTA NUEVA", use_container_width=True)
                 
                 if btn_registro:
                     if correo_nuevo and pass_nueva and pass_confirmar:
                         if pass_nueva == pass_confirmar:
-                            # Reviso que no me intenten clonar un correo
                             usuario_ref = db.collection('usuarios').document(correo_nuevo).get()
                             if usuario_ref.exists:
                                 st.error("⚠️ Este correo ya tiene una cuenta. Ve a Iniciar Sesión.")
                             else:
-                                # Guardo al usuario en mi Firebase
                                 db.collection('usuarios').document(correo_nuevo).set({
                                     'correo': correo_nuevo,
-                                    'password': encriptar_password(pass_nueva), # La guardo encriptada
+                                    'password': encriptar_password(pass_nueva),
                                     'rol': 'usuario_vip'
                                 })
                                 st.success("🎉 ¡Cuenta creada con éxito! Ve a la pestaña de Iniciar Sesión.")
@@ -136,7 +170,7 @@ if not st.session_state['autenticado']:
                             st.error("❌ Las contraseñas no coinciden.")
                     else:
                         st.warning("⚠️ Llena todos los campos para registrarte.")
-    st.stop() # Detengo el sistema para que nadie vea la tabla sin entrar
+    st.stop()
 
 # ==========================================
 # 🚀 MI CÓDIGO PRINCIPAL (Solo se carga si entraron)
@@ -245,7 +279,7 @@ try:
             
             with st.expander(f"{icon} {partido}  |  MERCADO: {mercado}  |  CUOTA: {cuota}  |  ESTATUS: {estatus}"):
                 st.markdown(f"""
-                <div style='background-color: #0a1128; padding: 20px; border-left: 4px solid #00f2ff; border-radius: 0 10px 10px 0;'>
+                <div style='background-color: rgba(10, 17, 40, 0.6); backdrop-filter: blur(10px); padding: 20px; border-left: 4px solid #00f2ff; border-radius: 0 10px 10px 0;'>
                     <p style='color: #ffffff; font-size: 1.1rem;'>{analisis}</p>
                 </div>
                 """, unsafe_allow_html=True)
@@ -261,3 +295,4 @@ except Exception as e:
 
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
