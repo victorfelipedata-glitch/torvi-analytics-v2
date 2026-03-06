@@ -2,84 +2,111 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 1. Configuración de la página (Título en la pestaña y Layout)
-st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
+# 1. Configuración de la página (Layout ancho y título de pestaña)
+st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
 
-# 2. CSS para el estilo Futurista (Centrado, fuentes neón y fondo oscuro)
+# 2. Estilo CSS para el look Futurista y Centrado
 st.markdown("""
     <style>
-    /* Centrar todo el contenido */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
     .main {
-        text-align: center;
+        background-color: #0e1117;
     }
-    /* Estilo para el Título Principal */
+    /* Título Neón Centrado */
     .titulo-futurista {
         font-family: 'Orbitron', sans-serif;
         color: #00f2ff;
         text-shadow: 0 0 10px #00f2ff, 0 0 20px #00f2ff;
-        font-size: 3rem;
+        font-size: 3.5rem;
         font-weight: bold;
         text-align: center;
         margin-bottom: 0px;
+        padding-top: 20px;
     }
-    /* Estilo para el Subtítulo */
     .subtitulo {
+        font-family: 'sans-serif';
         color: #ffffff;
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         text-align: center;
+        letter-spacing: 3px;
         margin-bottom: 30px;
-        opacity: 0.8;
+        opacity: 0.7;
     }
-    /* Estilo para las tarjetas de métricas */
+    /* Tarjetas de métricas */
     div[data-testid="stMetric"] {
         background-color: rgba(0, 242, 255, 0.05);
         border: 1px solid #00f2ff;
-        border-radius: 10px;
-        padding: 15px;
-        box-shadow: 0 0 5px rgba(0, 242, 255, 0.2);
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+    }
+    /* Centrar encabezados de sección */
+    h3 {
+        text-align: center;
+        color: #00f2ff;
+        font-family: 'Orbitron', sans-serif;
+        margin-top: 40px !important;
+    }
+    hr {
+        border: 0;
+        height: 1px;
+        background: linear-gradient(to right, transparent, #00f2ff, transparent);
+        margin: 20px 0;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Título Centrado y Futurista
+# 3. Encabezado de la App
 st.markdown('<p class="titulo-futurista">GALACTIC BET ANALYTICS</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">AI-DRIVEN SPORTS FORECASTING PLATFORM</p>', unsafe_allow_html=True)
+st.markdown("<hr>", unsafe_allow_html=True)
 
-# --- AQUÍ VA TU LÓGICA DE CONEXIÓN A GOOGLE SHEETS ---
-# (Usa el mismo código que ya tenías para leer el CSV de Google Sheets)
-sheet_url = "TU_URL_DE_GOOGLE_SHEETS_AQUÍ" # <--- No olvides poner tu link
-df = pd.read_csv(sheet_url)
+# 4. Conexión a Datos (Tu link de Google Sheets)
+sheet_url = "https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv"
 
-# 4. Diseño en Columnas para que se vea ordenado (Radar de Mercado)
-st.markdown("### 🛰️ RADAR DE MERCADO")
-col1, col2, col3 = st.columns(3)
+try:
+    df = pd.read_csv(sheet_url)
+    
+    # Limpieza básica: Asegurar que EV+ sea numérico (quitando % si lo tiene)
+    if df['EV+'].dtype == 'object':
+        df['EV+'] = df['EV+'].str.replace('%', '').astype(float)
 
-# Ejemplo de métricas (cámbialas por tus columnas reales del DF)
-with col1:
-    st.metric(label="EV+ PROMEDIO", value="+19.3%", delta="High Value")
-with col2:
-    st.metric(label="PICKS DETECTADOS", value="12", delta="Active")
-with col3:
-    st.metric(label="FIABILIDAD SISTEMA", value="88%", delta="Optimal")
+    # 5. Métricas Principales (Resumen)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(label="MÁXIMO EV+ DETECTADO", value=f"{df['EV+'].max()}%", delta="High Value")
+    with col2:
+        st.metric(label="PARTIDOS EN RADAR", value=len(df), delta="Activos")
+    with col3:
+        st.metric(label="SISTEMA", value="OPTIMAL", delta="Online")
 
-# 5. Gráfico de Valor (Futurista con Plotly)
-st.markdown("### 📈 MÉTRICAS DE VALOR POR PARTIDO")
-fig = px.bar(df, x='Equipo', y='EV+', 
-             title="Análisis de Valor Esperado",
-             template="plotly_dark", 
-             color_continuous_scale="Viridis")
+    # 6. Gráfico de Barras Futurista
+    st.markdown("### 📊 ANÁLISIS DE VALOR ESPERADO")
+    fig = px.bar(df, x='PARTIDO', y='EV+', 
+                 color='EV+',
+                 text='EV+',
+                 template="plotly_dark",
+                 color_continuous_scale="GnBu")
 
-fig.update_layout(
-    plot_bgcolor='rgba(0,0,0,0)',
-    paper_bgcolor='rgba(0,0,0,0)',
-    font_color="#00f2ff"
-)
+    fig.update_layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font_color="#00f2ff",
+        xaxis_title="Encuentros",
+        yaxis_title="Expectativa de Valor (%)"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-st.plotly_chart(fig, use_container_width=True)
+    # 7. Tabla de Predicciones Centrada
+    st.markdown("### 🛰️ PANEL DE CONTROL DE PICKS")
+    # Estilo para resaltar la tabla
+    st.dataframe(df.style.background_gradient(subset=['EV+'], cmap='BuGn'), use_container_width=True)
 
-# 6. Tabla de Datos (Estilo Limpio)
-st.markdown("### 📋 PANEL DE PREDICCIONES")
-st.dataframe(df.style.highlight_max(axis=0, color='#002b36'), use_container_width=True)
-st.divider()
-st.markdown("**© 2026 GALACTIC ANALYTICS | Desarollado por Torvi Analytics**")
+except Exception as e:
+    st.error(f"Error al conectar con los datos: {e}")
+    st.info("Asegúrate de que el Google Sheets sea público para cualquier persona con el enlace.")
 
+# Footer
+st.markdown("<br><hr>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; opacity: 0.8; color: #00f2ff; font-family: 'Orbitron', sans-serif;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
