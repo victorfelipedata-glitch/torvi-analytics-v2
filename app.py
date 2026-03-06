@@ -1,77 +1,77 @@
-# Importo las librerías que necesito para mi dashboard
+# Importo las librerías que necesito
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import time # <-- Nueva librería para romper la caché de Google
+import time
+import json
+import hashlib
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-# Configuro mi página para que use todo el ancho de la pantalla
+# Configuro mi página
 st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide")
 
-# Inyecto mi CSS personalizado
+# CSS para ocultar botones por defecto
 st.markdown("""
     <style>
-    /* 🚫 Oculto el menú de Streamlit, el header y el footer por completo 🚫 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    /* --------------------------------------------------------- */
-
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
     
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
     .main { background-color: #050814; }
     
     .titulo-futurista {
-        font-family: 'Orbitron', sans-serif;
-        color: #00f2ff;
+        font-family: 'Orbitron', sans-serif; color: #00f2ff;
         text-shadow: 0 0 5px #00f2ff, 0 0 15px #00f2ff, 0 0 30px #008cff;
-        font-size: 4rem;
-        font-weight: 900;
-        text-align: center;
-        margin-bottom: 0px;
-        padding-top: 10px;
-        letter-spacing: 2px;
+        font-size: 4rem; font-weight: 900; text-align: center; margin-bottom: 0px; padding-top: 10px;
     }
-    
     .subtitulo {
-        color: #b3cce6;
-        font-family: 'Orbitron', sans-serif;
-        font-size: 1.2rem;
-        text-align: center;
-        letter-spacing: 4px;
-        margin-bottom: 40px;
+        color: #b3cce6; font-family: 'Orbitron', sans-serif; font-size: 1.2rem;
+        text-align: center; letter-spacing: 4px; margin-bottom: 40px;
     }
-    
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #0a1128, #000000);
-        border: 1px solid #00f2ff;
-        border-radius: 10px;
-        padding: 20px;
-        text-align: center;
-        box-shadow: 0 0 10px rgba(0, 242, 255, 0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        background: linear-gradient(145deg, #0a1128, #000000); border: 1px solid #00f2ff;
+        border-radius: 10px; padding: 20px; text-align: center;
+        box-shadow: 0 0 10px rgba(0, 242, 255, 0.1); transition: transform 0.3s ease;
     }
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
+        transform: translateY(-5px); box-shadow: 0 0 25px rgba(0, 242, 255, 0.6);
     }
+    hr { border: 0; height: 2px; background: linear-gradient(90deg, transparent, #00f2ff, #bc13fe, transparent); margin: 30px 0; }
     
-    hr { 
-        border: 0; 
-        height: 2px; 
-        background: linear-gradient(90deg, transparent, #00f2ff, #bc13fe, transparent); 
-        margin: 30px 0; 
-        box-shadow: 0 0 10px #00f2ff;
+    div.stButton > button:first-child {
+        background-color: #0a1128; color: #00f2ff; border: 1px solid #00f2ff; font-family: 'Orbitron', sans-serif;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #00f2ff; color: #050814; box-shadow: 0 0 15px #00f2ff;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# Títulos
 st.markdown('<p class="titulo-futurista">GALACTIC BET</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">SISTEMA DE ANÁLISIS EV+ AVANZADO</p>', unsafe_allow_html=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
 # ==========================================
-# 🔐 MI SISTEMA DE SEGURIDAD
+# 🔗 CONEXIÓN A MI BASE DE DATOS FIREBASE
+# ==========================================
+# Verifico si ya me conecté a Firebase para no conectarme dos veces y causar un error
+if not firebase_admin._apps:
+    # Leo mi llave secreta de la bóveda de Streamlit y la convierto a diccionario
+    dict_claves = json.loads(st.secrets["firebase_key"])
+    cred = credentials.Certificate(dict_claves)
+    firebase_admin.initialize_app(cred)
+
+# Abro el canal de comunicación con Firestore
+db = firestore.client()
+
+# Función para encriptar contraseñas (NUNCA guardo contraseñas en texto plano)
+def encriptar_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ==========================================
+# 🔐 MI SISTEMA DE SEGURIDAD VIP (LOGIN / REGISTRO)
 # ==========================================
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
@@ -79,22 +79,68 @@ if 'autenticado' not in st.session_state:
 if not st.session_state['autenticado']:
     col_vacia1, col_centro, col_vacia2 = st.columns([1, 2, 1])
     with col_centro:
-        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO RESTRINGIDO</h3>", unsafe_allow_html=True)
-        with st.form("formulario_acceso"):
-            mi_clave = st.text_input("🔑 Ingresa la clave de encriptación:", type="password")
-            boton_entrar = st.form_submit_button("🚀 ENTRAR AL SISTEMA", use_container_width=True)
-        if boton_entrar:
-            if mi_clave == st.secrets["password_vip"]:
-                st.session_state['autenticado'] = True
-                st.rerun()
-            else:
-                st.error("❌ Clave incorrecta. Sistema bloqueado.")
-    st.stop() 
+        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 TERMINAL DE ACCESO</h3>", unsafe_allow_html=True)
+        
+        # Creo dos pestañas para separar Login y Registro
+        tab_login, tab_registro = st.tabs(["🚀 INICIAR SESIÓN", "📝 REGISTRARSE"])
+        
+        with tab_login:
+            with st.form("form_login"):
+                correo_login = st.text_input("📧 Correo Electrónico:")
+                pass_login = st.text_input("🔑 Contraseña:", type="password")
+                btn_login = st.form_submit_button("ENTRAR AL SISTEMA", use_container_width=True)
+                
+                if btn_login:
+                    if correo_login and pass_login:
+                        # Busco el documento del usuario en mi colección de Firebase
+                        usuario_ref = db.collection('usuarios').document(correo_login).get()
+                        
+                        if usuario_ref.exists: # Si el usuario existe, verifico la contraseña
+                            datos_usuario = usuario_ref.to_dict()
+                            pass_encriptada = encriptar_password(pass_login)
+                            
+                            if datos_usuario['password'] == pass_encriptada:
+                                st.session_state['autenticado'] = True
+                                st.rerun() # Acceso concedido, recargo la página
+                            else:
+                                st.error("❌ Contraseña incorrecta.")
+                        else:
+                            st.error("❌ Este correo no está registrado en el sistema.")
+                    else:
+                        st.warning("⚠️ Ingresa tu correo y contraseña.")
+
+        with tab_registro:
+            with st.form("form_registro"):
+                st.info("Crea una cuenta para acceder a mis pronósticos.")
+                correo_nuevo = st.text_input("📧 Correo Electrónico:")
+                pass_nueva = st.text_input("🔑 Crea una Contraseña:", type="password")
+                pass_confirmar = st.text_input("🔑 Confirma tu Contraseña:", type="password")
+                btn_registro = st.form_submit_button("CREAR CUENTA NUEVA", use_container_width=True)
+                
+                if btn_registro:
+                    if correo_nuevo and pass_nueva and pass_confirmar:
+                        if pass_nueva == pass_confirmar:
+                            # Reviso que no me intenten clonar un correo
+                            usuario_ref = db.collection('usuarios').document(correo_nuevo).get()
+                            if usuario_ref.exists:
+                                st.error("⚠️ Este correo ya tiene una cuenta. Ve a Iniciar Sesión.")
+                            else:
+                                # Guardo al usuario en mi Firebase
+                                db.collection('usuarios').document(correo_nuevo).set({
+                                    'correo': correo_nuevo,
+                                    'password': encriptar_password(pass_nueva), # La guardo encriptada
+                                    'rol': 'usuario_vip'
+                                })
+                                st.success("🎉 ¡Cuenta creada con éxito! Ve a la pestaña de Iniciar Sesión.")
+                        else:
+                            st.error("❌ Las contraseñas no coinciden.")
+                    else:
+                        st.warning("⚠️ Llena todos los campos para registrarte.")
+    st.stop() # Detengo el sistema para que nadie vea la tabla sin entrar
 
 # ==========================================
-# 🚀 MI CÓDIGO PRINCIPAL
+# 🚀 MI CÓDIGO PRINCIPAL (Solo se carga si entraron)
 # ==========================================
-# Agrego el rompe-caché con time.time() para forzar datos en vivo
 sheet_url = f"https://docs.google.com/spreadsheets/d/12lDBRn6nXm4yvzjHhqL6w2FbCw8FPS1dYt5BoZYuP4w/export?format=csv&_={int(time.time())}"
 
 try:
@@ -104,11 +150,22 @@ try:
 
     # Consola Lateral
     st.sidebar.markdown("<h2 style='text-align: center; font-family: Orbitron; color: #00f2ff;'>📟 CONSOLA</h2>", unsafe_allow_html=True)
+    if st.sidebar.button("🔄 ACTUALIZAR DATOS EN VIVO", use_container_width=True):
+        st.rerun()
+        
+    st.sidebar.markdown("<br>", unsafe_allow_html=True)
     mi_filtro = st.sidebar.text_input("🔍 Buscar Equipo o Partido:")
+    
+    # --- BOTÓN PARA CERRAR SESIÓN ---
+    st.sidebar.markdown("<hr>", unsafe_allow_html=True)
+    if st.sidebar.button("🚪 CERRAR SESIÓN", use_container_width=True):
+        st.session_state['autenticado'] = False
+        st.rerun()
+
     if mi_filtro:
         df = df[df['PARTIDO'].str.contains(mi_filtro, case=False, na=False) | df['MERCADO'].str.contains(mi_filtro, case=False, na=False)]
 
-    # 1. TARJETAS DE MÉTRICAS (KPIs)
+    # 1. TARJETAS DE MÉTRICAS
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         val_max = df['EV+'].max() if not df.empty and 'EV+' in df.columns else 0
@@ -122,25 +179,19 @@ try:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. SECCIÓN DE BANKROLL Y RESULTADOS
+    # 2. SECCIÓN DE BANKROLL
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>💰 CONTROL DE BANKROLL Y YIELD</h3>", unsafe_allow_html=True)
-    
-    # Configuración de Bank
     col_b1, col_b2, col_b3 = st.columns(3)
     with col_b1:
-        bank_inicial = st.number_input("💵 Ingresa tu Bank Inicial ($):", value=1000.0, step=100.0)
+        bank_inicial = st.number_input("💵 Bank Inicial ($):", value=1000.0, step=100.0)
     with col_b2:
-        stake_base = st.number_input("🪙 Stake Fijo por Apuesta ($):", value=50.0, step=10.0)
+        stake_base = st.number_input("🪙 Stake Fijo ($):", value=50.0, step=10.0)
     
     if 'ESTATUS' in df.columns and 'CUOTA CASA' in df.columns:
-        # Analizo los estatus sin importar mayúsculas
         estatus_limpio = df['ESTATUS'].astype(str).str.lower()
-        
-        # Filtro ganadas y perdidas usando variaciones para atrapar "ganada" y "perdida"
         ganadas = df[estatus_limpio.str.contains('ganad|verde|win|aciert', na=False, regex=True)]
         perdidas = df[estatus_limpio.str.contains('perdid|rojo|loss|fall', na=False, regex=True)]
         
-        # Matemáticas de apuestas
         ganancia_bruta = sum(stake_base * (float(cuota) - 1) for cuota in ganadas['CUOTA CASA'] if pd.notna(cuota))
         perdida_total = stake_base * len(perdidas)
         profit_neto = ganancia_bruta - perdida_total
@@ -149,7 +200,6 @@ try:
         total_cerradas = len(ganadas) + len(perdidas)
         yield_roi = (profit_neto / (stake_base * total_cerradas)) * 100 if total_cerradas > 0 else 0
 
-        # Muestro el historial
         met_col1, met_col2, met_col3, met_col4 = st.columns(4)
         with met_col1:
             st.metric("✅ ACERTADAS", len(ganadas))
@@ -158,7 +208,7 @@ try:
         with met_col3:
             st.metric("📈 YIELD / ROI", f"{yield_roi:.2f}%")
         with met_col4:
-            st.metric("🏦 BANK ACTUAL", f"${bank_actual:.2f}", delta=f"${profit_neto:.2f} Profit Neto")
+            st.metric("🏦 BANK ACTUAL", f"${bank_actual:.2f}", delta=f"${profit_neto:.2f} Profit")
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -173,14 +223,12 @@ try:
             xaxis_title="Valor Esperado (EV+ %)", yaxis_title="", showlegend=False, height=350)
         st.plotly_chart(fig, use_container_width=True)
 
-    # 4. TABLA PRINCIPAL CRUDA (Sin la columna de Análisis)
+    # 4. TABLA PRINCIPAL CRUDA
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🛰️ BASE DE DATOS MAESTRA</h3>", unsafe_allow_html=True)
-    
-    # Creo una copia de la tabla y le borro la columna ANALISIS solo para esta vista
     df_mostrar = df.drop(columns=['ANALISIS']) if 'ANALISIS' in df.columns else df
     st.dataframe(df_mostrar, use_container_width=True, height=250)
 
-    # 5. DESGLOSE TÁCTICO EXPANSIBLE (Aquí sí vive el Análisis)
+    # 5. DESGLOSE TÁCTICO EXPANSIBLE
     st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>🧠 DESGLOSE TÁCTICO DE PICKS</h3>", unsafe_allow_html=True)
     if not df.empty:
         for index, row in df.iterrows():
@@ -191,7 +239,6 @@ try:
             analisis = row.get('ANALISIS', 'Sin análisis registrado.')
             estatus = str(row.get('ESTATUS', '')).upper()
             
-            # Icono según resultado
             if any(palabra in estatus for palabra in ['GANAD', 'VERDE', 'WIN']): icon = "✅"
             elif any(palabra in estatus for palabra in ['PERDID', 'ROJO', 'LOSS']): icon = "❌"
             else: icon = "⏳"
@@ -214,5 +261,3 @@ except Exception as e:
 
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
-
-
