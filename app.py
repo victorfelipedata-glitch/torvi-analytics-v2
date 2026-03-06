@@ -9,10 +9,9 @@ st.set_page_config(page_title="GALACTIC BET ANALYTICS", layout="wide", initial_s
 # Inyecto mi CSS personalizado para ocultar los botones por defecto y darle mi estilo futurista
 st.markdown("""
     <style>
-    /* 🚫 Oculto el menú de Streamlit, el enlace a GitHub y el header/footer por defecto 🚫 */
+    /* 🚫 Oculto el menú de Streamlit y el footer por defecto, PERO DEJO EL HEADER PARA VER LA FLECHITA 🚫 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden;}
     /* --------------------------------------------------------- */
 
@@ -86,7 +85,7 @@ mi_clave = st.sidebar.text_input("🔑 Ingresa la clave de acceso:", type="passw
 
 # Verifico si la clave es correcta antes de mostrar mi trabajo
 if mi_clave != "Galacticos2026": # <-- Aquí puedo cambiar mi contraseña cuando quiera
-    st.warning("⚠️ Acceso Restringido. Ingresa la clave secreta en la consola lateral para ver mis picks.")
+    st.warning("⚠️ Acceso Restringido. Haz clic en la flechita '>' arriba a la izquierda para abrir la consola e ingresar la clave secreta.")
     st.stop() # Detengo la ejecución del código aquí si no tienen mi clave
 
 # ==========================================
@@ -198,6 +197,7 @@ except Exception as e:
 # Pongo mi firma en el pie de página
 st.markdown("<br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; opacity: 0.8;'>© 2026 GALACTIC ANALYTICS | Desarrollado por Torvi Analytics</p>", unsafe_allow_html=True)
+
 
 
 
