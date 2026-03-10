@@ -10,9 +10,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="QUASAR | Predictive Analytics", layout="wide")
+st.set_page_config(page_title="QUASAR Analytics | Predictive Sports Intelligence", layout="wide")
 
-# --- CSS: ESTILO FINTECH / QUASAR ---
+# --- VARIABLES GLOBAL DEL LOGO (CAMBIA ESTE ENLACE POR TU LOGO REAL) ---
+# Te sugiero un logo circular o hexagonal que fusione un quasar neón con líneas de un balón de fútbol o gráficas.
+LOGO_URL = "https://img.icons8.com/neon/96/space-shuttle.png" # Placeholder profesional, cámbialo.
+
+# --- CSS: ESTILO FINTECH / QUASAR COSMIC VISION ---
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -20,9 +24,12 @@ st.markdown("""
     
     .stApp { background-color: #050510; font-family: 'Inter', sans-serif; background-image: radial-gradient(circle at 50% 0%, #1a0b2e 0%, #050510 60%); background-attachment: fixed;}
     
-    .titulo-axiom { font-family: 'Inter', sans-serif; color: #E2E8F0; font-size: 3.5rem; font-weight: 800; text-align: center; margin-bottom: -15px; letter-spacing: 2px; text-shadow: 0 0 20px rgba(188, 19, 254, 0.5);}
-    .titulo-axiom span { color: #bc13fe; }
-    .subtitulo { color: #00f2ff; font-family: 'JetBrains Mono', monospace; text-align: center; letter-spacing: 3px; margin-bottom: 30px; font-size: 0.9rem; text-transform: uppercase; text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);}
+    /* Header con Logo Centrado */
+    .header-container { display: flex; justify-content: center; align-items: center; padding: 20px 0; margin-bottom: 20px; border-bottom: 1px solid rgba(188, 19, 254, 0.2); }
+    .header-logo { height: 90px; filter: drop-shadow(0 0 15px rgba(188, 19, 254, 0.8)); }
+    
+    /* Título Quasar Integrado en el header si se desea, pero preferimos solo logo */
+    .subtitulo { color: #00f2ff; font-family: 'JetBrains Mono', monospace; text-align: center; letter-spacing: 3px; margin-top: -10px; margin-bottom: 30px; font-size: 0.9rem; text-transform: uppercase; text-shadow: 0 0 10px rgba(0, 242, 255, 0.5);}
     
     .pick-card { background-color: rgba(17, 24, 39, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(188, 19, 254, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 15px; border-left: 4px solid #00f2ff; transition: transform 0.2s; }
     .pick-card:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0, 242, 255, 0.2); }
@@ -46,6 +53,10 @@ st.markdown("""
     div[data-testid="stMetric"] { background-color: rgba(0,0,0,0.5); border: 1px solid rgba(188, 19, 254, 0.3); border-radius: 10px; padding: 15px; box-shadow: none; backdrop-filter: blur(5px);}
     
     .stNumberInput input { background-color: rgba(0,0,0,0.5) !important; color: #00f2ff !important; border: 1px solid rgba(0, 242, 255, 0.3) !important; font-weight: bold; font-family: 'JetBrains Mono'; }
+    
+    /* Botón de actualizar minimalista en sidebar */
+    .stSidebar [data-testid="stButton"] button { background-color: transparent; border: 1px solid rgba(0, 242, 255, 0.5); color: #00f2ff; font-family: 'JetBrains Mono'; transition: 0.3s;}
+    .stSidebar [data-testid="stButton"] button:hover { background-color: rgba(0, 242, 255, 0.1); border-color: #00f2ff; box-shadow: 0 0 10px rgba(0, 242, 255, 0.2);}
     </style>
     """, unsafe_allow_html=True)
 
@@ -57,7 +68,7 @@ try:
         firebase_admin.initialize_app(cred)
     db = firestore.client()
 except Exception:
-    st.error("Error conectando a los servidores.")
+    st.error("Fallo de conexión galáctica.")
     st.stop()
 
 def encriptar_password(password):
@@ -68,8 +79,13 @@ if 'autenticado' not in st.session_state: st.session_state['autenticado'] = Fals
 if 'user_rol' not in st.session_state: st.session_state['user_rol'] = 'invitado'
 if 'user_email' not in st.session_state: st.session_state['user_email'] = ''
 
-st.markdown('<p class="titulo-axiom">QUASAR <span>ANALYTICS</span></p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">NÚCLEO GALÁCTICO ACTIVO | VISIÓN PREDICTIVA</p>', unsafe_allow_html=True)
+# --- HEADER CON LOGO CENTRADO (REEMPLAZA TÍTULO Y BOTÓN VIEJO) ---
+st.markdown(f"""
+    <div class="header-container">
+        <img src="{LOGO_URL}" class="header-logo" alt="Quasar Analytics Logo">
+    </div>
+""", unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">NÚCLEO GALÁCTICO ACTIVO | VISIÓN PREDICTIVA DE ALTA VENTAJA</p>', unsafe_allow_html=True)
 
 # --- LOGIN ---
 if not st.session_state['autenticado']:
@@ -79,7 +95,7 @@ if not st.session_state['autenticado']:
         t1, t2 = st.tabs(["INICIAR SESIÓN", "CREAR CUENTA"])
         with t1:
             with st.form("f_login"):
-                u = st.text_input("Correo:")
+                u = st.text_input("Correo Galáctico:")
                 p = st.text_input("Contraseña:", type="password")
                 if st.form_submit_button("CONECTAR AL NÚCLEO", use_container_width=True):
                     if u.strip(): 
@@ -136,12 +152,18 @@ except Exception:
 
 df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
 
-# --- SIDEBAR LIMPIO ---
+# --- SIDEBAR LIMPIO CON BOTÓN DE ACTUALIZAR ---
 st.sidebar.markdown(f"<h3 style='color: #00f2ff; font-family: Inter; text-shadow: 0 0 5px #00f2ff;'>👤 {user_email.split('@')[0]}</h3>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<p style='color: #bc13fe; font-family: JetBrains Mono; font-size: 0.8rem;'>RANGO: {st.session_state['user_rol'].upper()}</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
 
-if st.sidebar.button("🚪 Desconectar del Núcleo", use_container_width=True):
+# Botón de Actualizar Mantenido en Sidebar para no estorbar el diseño
+if st.sidebar.button("🔄 SINCRONIZAR", help="Recargar datos del núcleo de Quasar"):
+    st.toast("Captando ondas gravitacionales del mercado...", icon="🛰️")
+    time.sleep(0.5)
+    st.rerun()
+
+if st.sidebar.button("🚪 Desconectar", use_container_width=True):
     st.session_state['autenticado'] = False
     st.session_state['user_email'] = ''
     st.rerun()
@@ -157,14 +179,6 @@ def calcular_kelly(ev_pct, cuota, bankroll):
     inversion = bankroll * pct_final
     return inversion, pct_final * 100
 
-# --- BOTÓN DE ACTUALIZAR PRINCIPAL (SIEMPRE VISIBLE) ---
-col_vacia, col_btn, col_vacia2 = st.columns([1, 2, 1])
-with col_btn:
-    if st.button("🔄 SINCRONIZAR DATOS DEL QUASAR", use_container_width=True, type="primary"):
-        st.toast("Captando ondas gravitacionales del mercado...", icon="🛰️")
-        time.sleep(0.5)
-        st.rerun()
-
 st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin-top: 10px;'>", unsafe_allow_html=True)
 
 if not df.empty:
@@ -174,13 +188,13 @@ if not df.empty:
 
     m1, m2, m3 = st.columns(3)
     max_ev_actual = df_activos['ev'].max() if not df_activos.empty else 0
-    m1.metric("🔥 MAYOR VENTAJA", f"{max_ev_actual}%")
+    m1.metric("🔥 MAYOR VENTAJA EV+", f"{max_ev_actual}%")
     m2.metric("🎯 EN EL RADAR", len(df_activos))
     m3.metric("🏦 MI CAPITAL (BANK)", f"${base_bankroll:,.2f}")
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    tabs = ["📡 RADAR QUASAR", "💎 PARLAY VIP", "💼 PORTAFOLIO", "⚙️ PERFIL & LAB"]
+    tabs = ["📡 RADAR QUASAR", "💎 PARLAY VIP", "💼 MI PORTAFOLIO", "⚙️ PERFIL & LAB"]
     if st.session_state['user_rol'] == 'admin': tabs.append("👑 CONSOLA ADMIN")
     paneles = st.tabs(tabs)
     
@@ -188,11 +202,11 @@ if not df.empty:
     with paneles[0]:
         if not df_normales.empty:
             
-            # --- NUEVO: DOBLE VISUALIZACIÓN INTERACTIVA ---
+            # --- MANTENEMOS VISUALIZACIONES INTERACTIVAS ---
             col_graph1, col_graph2 = st.columns(2)
             
             with col_graph1:
-                st.markdown("<p style='text-align: center; color: #bc13fe; font-family: Orbitron;'>TERMODINÁMICA DEL MERCADO (EV+)</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #bc13fe; font-family: Orbitron; font-size: 0.8rem; letter-spacing: 2px;'>POTENCIA DEL MEJOR PICK (EV+)</p>", unsafe_allow_html=True)
                 # Velocímetro (Gauge Chart) para el Max EV
                 fig_gauge = go.Figure(go.Indicator(
                     mode = "gauge+number",
@@ -206,17 +220,17 @@ if not df.empty:
                         'borderwidth': 2,
                         'bordercolor': "rgba(188, 19, 254, 0.3)",
                         'steps': [
-                            {'range': [0, 5], 'color': "rgba(239, 68, 68, 0.2)"},
-                            {'range': [5, 15], 'color': "rgba(245, 158, 11, 0.2)"},
-                            {'range': [15, 30], 'color': "rgba(16, 185, 129, 0.2)"}],
+                            {'range': [0, 5], 'color': "rgba(239, 68, 68, 0.1)"},
+                            {'range': [5, 15], 'color': "rgba(245, 158, 11, 0.1)"},
+                            {'range': [15, 30], 'color': "rgba(16, 185, 129, 0.1)"}],
                     }
                 ))
-                fig_gauge.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=220, margin=dict(l=20, r=20, t=10, b=10))
+                fig_gauge.update_layout(paper_bgcolor="rgba(0,0,0,0)", height=220, margin=dict(l=30, r=30, t=10, b=10))
                 st.plotly_chart(fig_gauge, use_container_width=True)
 
             with col_graph2:
-                st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron;'>MAPA DE DISPERSIÓN 3D</p>", unsafe_allow_html=True)
-                # Scatter Plot original que te gustó
+                st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; letter-spacing: 2px;'>MAPEADOR DE SEÑALES</p>", unsafe_allow_html=True)
+                # Mantenemos Scatter Plot 3D interactivo
                 df_chart = df_normales.copy()
                 df_chart['cuota'] = pd.to_numeric(df_chart['cuota'])
                 df_chart['prob_real'] = pd.to_numeric(df_chart['prob_real'])
@@ -311,7 +325,7 @@ if not df.empty:
                         monto_elegido = st.number_input("Tu Inversión ($):", min_value=0.0, value=float(inv_recomendada), step=10.0, key=f"in_p_{pid}")
                     with c_btn:
                         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-                        if st.button("📥 Seguir Combinada", key=f"add_p_{pid}"):
+                        if st.button("📥 Seguir Combinada VIP", key=f"add_p_{pid}"):
                             try:
                                 db.collection('usuarios').document(user_email).collection('portafolio').document(pid).set({
                                     'pick_id': pid, 'stake': monto_elegido, 'fecha': datetime.now()
@@ -371,7 +385,7 @@ if not df.empty:
                 mis_perdidas = len(resueltos_mios[resueltos_mios['estatus'] == 'PERDIDA'])
                 mi_wr = (mis_ganadas/(mis_ganadas+mis_perdidas))*100 if (mis_ganadas+mis_perdidas)>0 else 0
                 
-                # --- NUEVA GRÁFICA: DONUT DE WINRATE ---
+                # --- MANTENEMOS GRÁFICA: DONUT DE WINRATE ---
                 col_w1, col_w2 = st.columns([1, 2])
                 with col_w1:
                     st.metric("✅ ACIERTOS", mis_ganadas)
@@ -382,9 +396,10 @@ if not df.empty:
                     labels = ['Aciertos', 'Fallos']
                     values = [mis_ganadas, mis_perdidas]
                     fig_pie = go.Figure(data=[go.Pie(labels=labels, values=values, hole=.6, 
-                                          marker_colors=['#10B981', '#EF4444'])])
+                                          marker_colors=['#10B981', '#EF4444'],
+                                          textinfo='none')]) # Quitamos texto para limpiar
                     fig_pie.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
-                                          margin=dict(t=0, b=0, l=0, r=0), height=200, showlegend=False)
+                                          margin=dict(t=10, b=10, l=10, r=10), height=180, showlegend=False)
                     st.plotly_chart(fig_pie, use_container_width=True)
                 
                 for i, r in resueltos_mios.iterrows():
@@ -405,7 +420,7 @@ if not df.empty:
         
         with c_p1:
             st.markdown("<div class='pick-card'>", unsafe_allow_html=True)
-            st.markdown("<h3 style='color: #00f2ff; font-family: Inter;'>⚙️ Configuración de Capital</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #00f2ff; font-family: Inter;'>⚙️ Calibración de Capital</h3>", unsafe_allow_html=True)
             st.write("Quasar utiliza la fórmula Quarter-Kelly (max 5%) para la gestión de tu Bankroll.")
             with st.form("form_bank"):
                 nuevo_b = st.number_input("Mi Bankroll Actual ($):", value=base_bankroll, step=50.0)
@@ -420,16 +435,16 @@ if not df.empty:
 
         with c_p2:
             st.markdown("<div class='pick-card'>", unsafe_allow_html=True)
-            st.markdown("<h3 style='color: #bc13fe; font-family: Inter;'>🧮 Laboratorio de Cuotas</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #bc13fe; font-family: Inter;'>🧮 Laboratorio de Probabilidades</h3>", unsafe_allow_html=True)
             st.write("Convierte la ilusión de la casa de apuestas en probabilidad matemática:")
             cuota_test = st.number_input("Ingresa un momio (Decimal):", value=1.90, step=0.01)
             prob_impl = (1 / cuota_test) * 100 if cuota_test > 0 else 0
-            st.markdown(f"<h2 style='color: #00f2ff; text-align: center;'>{prob_impl:.1f}%</h2>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='color: #00f2ff; text-align: center; font-family: JetBrains Mono;'>{prob_impl:.1f}%</h2>", unsafe_allow_html=True)
             st.markdown("</div>", unsafe_allow_html=True)
             
         st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
-        st.markdown("<h4 style='color: #E2E8F0;'>🧠 El Motor de Quasar</h4>", unsafe_allow_html=True)
-        st.write("Para encontrar el Valor Esperado (EV+), nuestro algoritmo de núcleo procesa la siguiente desigualdad matemática:")
+        st.markdown("<h4 style='color: #E2E8F0;'>🧠 El Motor Matemático del Quasar</h4>", unsafe_allow_html=True)
+        st.write("Para encontrar el Valor Esperado (EV+), nuestro algoritmo de núcleo procesa la siguiente desigualdad estadística:")
         st.latex(r"EV+ = \left( P_{real} \cdot \text{Cuota} \right) - 1 > 0")
         st.write("Donde $P_{real}$ es la probabilidad dictada por nuestros modelos predictivos, desnudando el margen de error del corredor.")
 
@@ -437,7 +452,7 @@ if not df.empty:
     if st.session_state['user_rol'] == 'admin':
         with paneles[4]:
             st.markdown("<h3 style='color: #00f2ff;'>Centro de Comando Quasar</h3>", unsafe_allow_html=True)
-            st.write("Cierra los eventos activos aquí. Esto actualizará los portafolios y las gráficas WinRate de todos los usuarios.")
+            st.write("Cierra los eventos activos aquí. Esto actualizará los portafolios de todos los usuarios.")
             if not df_activos.empty:
                 for i, r in df_activos.iterrows():
                     ca, cb, cc = st.columns([3, 1, 1])
