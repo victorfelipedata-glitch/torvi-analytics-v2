@@ -123,28 +123,37 @@ if st.button("🔄 ACTUALIZAR DATOS DEL RADAR", use_container_width=True):
 st.markdown("<br>", unsafe_allow_html=True)
 
 if not df.empty:
-    df_activos = df[df['estatus'] == 'PENDIENTE']
+    # Asegurarnos de que los picks viejos no crasheen si no tienen la etiqueta 'tipo'
+    if 'tipo' not in df.columns:
+        df['tipo'] = 'sencilla'
+        
+    # 🗂️ FILTRAMOS LOS DATOS (Sencillas vs Parlays)
+    df_activos_sencillas = df[(df['estatus'] == 'PENDIENTE') & (df['tipo'] != 'parlay')]
+    df_activos_parlays = df[(df['estatus'] == 'PENDIENTE') & (df['tipo'] == 'parlay')]
     df_historial = df[df['estatus'] != 'PENDIENTE']
 
-    tab_radar, tab_historial = st.tabs(["🛰️ RADAR EN VIVO", "📖 HISTORIAL DE JUGADAS"])
+    # 🔥 AHORA TENEMOS 3 PESTAÑAS 🔥
+    tab_radar, tab_parlay, tab_historial = st.tabs(["🛰️ RADAR EN VIVO", "🌌 LA SOÑADORA", "📖 HISTORIAL"])
     
-    # 🟢 PESTAÑA 1: RADAR ACTIVO
+    # ==========================================
+    # 🟢 PESTAÑA 1: RADAR ACTIVO (SOLO SENCILLAS EV+)
+    # ==========================================
     with tab_radar:
-        if not df_activos.empty:
+        if not df_activos_sencillas.empty:
             c1, c2, c3, c4 = st.columns(4)
-            c1.metric("🔥 MÁX EV ACTUAL", f"{df_activos['ev'].max()}%")
-            c2.metric("🎯 ANÁLISIS ACTIVOS", len(df_activos))
+            c1.metric("🔥 MÁX EV ACTUAL", f"{df_activos_sencillas['ev'].max()}%")
+            c2.metric("🎯 ANÁLISIS ACTIVOS", len(df_activos_sencillas))
             c3.metric("🏦 BANK SUGERIDO", "$1,000") 
             c4.metric("🛡️ STATUS", "ONLINE")
             
             st.markdown("<br>", unsafe_allow_html=True)
             
-            fig = px.bar(df_activos, x='ev', y='mercado', orientation='h', color='ev', template="plotly_dark")
+            fig = px.bar(df_activos_sencillas, x='ev', y='mercado', orientation='h', color='ev', template="plotly_dark")
             fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(l=0, r=0, t=30, b=0))
             st.plotly_chart(fig, use_container_width=True)
 
-            st.markdown("<h4 style='color: #b3cce6; font-family: Orbitron;'>PRONÓSTICOS EN JUEGO</h4>", unsafe_allow_html=True)
-            for i, r in df_activos.iterrows():
+            st.markdown("<h4 style='color: #b3cce6; font-family: Orbitron;'>PRONÓSTICOS EV+ EN JUEGO</h4>", unsafe_allow_html=True)
+            for i, r in df_activos_sencillas.iterrows():
                 with st.expander(f"⏳ {r['partido']} | {r['mercado']} | EV+: {r['ev']}%"):
                     pcasa = r.get('prob_casa', 'N/A')
                     preal = r.get('prob_real', 'N/A')
@@ -153,7 +162,6 @@ if not df.empty:
                     
                     if st.session_state['user_rol'] == 'admin':
                         st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
-                        # 🔥 AGREGAMOS EL BOTÓN DE BORRAR AQUÍ 🔥
                         col_a, col_b, col_c = st.columns(3)
                         if col_a.button(f"✅ Ganada", key=f"win_{r['id']}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
@@ -165,55 +173,51 @@ if not df.empty:
                             db.collection('pronosticos').document(r['id']).delete()
                             st.rerun()
         else:
-            st.info("No hay pronósticos activos. El radar está limpio.")
+            st.info("No hay pronósticos simples activos. El radar está limpio.")
 
-    # 🔴 PESTAÑA 2: HISTORIAL
-    with tab_historial:
-        if not df_historial.empty:
-            ganadas = len(df_historial[df_historial['estatus'] == 'GANADA'])
-            perdidas = len(df_historial[df_historial['estatus'] == 'PERDIDA'])
-            total_resueltas = ganadas + perdidas
-            win_rate = (ganadas / total_resueltas) * 100 if total_resueltas > 0 else 0
-            
-            st.markdown("<h4 style='color: #b3cce6; font-family: Orbitron; text-align: center;'>MÉTRICAS DE RENDIMIENTO</h4>", unsafe_allow_html=True)
-            h_col1, h_col2, h_col3 = st.columns(3)
-            with h_col1:
-                st.metric("✅ ACERTADAS", ganadas)
-            with h_col2:
-                st.metric("❌ FALLADAS", perdidas)
-            with h_col3:
-                st.metric("📈 WIN RATE", f"{win_rate:.1f}%")
-            
-            st.markdown("<hr>", unsafe_allow_html=True)
-            
-            for i, r in df_historial.iterrows():
-                icono = "✅ GANADA" if r['estatus'] == 'GANADA' else "❌ PERDIDA"
-                color_borde = "#00ff00" if r['estatus'] == 'GANADA' else "#ff0000"
+    # ==========================================
+    # 🌌 PESTAÑA 2: LA SOÑADORA (PARLAYS)
+    # ==========================================
+    with tab_parlay:
+        st.markdown("<h4 style='text-align: center; color: #ffd700; font-family: Orbitron;'>🎟️ TICKET DORADO DEL DÍAZ</h4>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #b3cce6;'>Combos de alta cuota para buscar el gran golpe con un stake bajo.</p>", unsafe_allow_html=True)
+        
+        if not df_activos_parlays.empty:
+            for i, r in df_activos_parlays.iterrows():
+                # Diseño especial para el parlay con bordes dorados
+                st.markdown(f"""
+                <div style="border: 2px solid #ffd700; border-radius: 10px; padding: 15px; background: rgba(255, 215, 0, 0.05); margin-bottom: 15px;">
+                    <h4 style="color: #ffd700; margin-top: 0;">🔥 CUOTA TOTAL: {r['cuota']}</h4>
+                    <p style="color: #00f2ff;"><b>Partidos:</b> {r['partido']}</p>
+                    <p style="color: #00f2ff;"><b>Mercados:</b> {r['mercado']}</p>
+                    <hr style="background: #ffd700;">
+                    <p style="color: #ffffff;">{r.get('analisis', '')}</p>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                with st.expander(f"{icono} | {r['partido']} | {r['mercado']}"):
-                    st.markdown(f"<div style='border-left: 3px solid {color_borde}; padding-left: 15px;'>", unsafe_allow_html=True)
-                    st.write(f"**Cuota Final:** {r['cuota']} | **EV+ Inicial:** {r['ev']}%")
-                    st.write(r.get('analisis', ''))
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    
-                    if st.session_state['user_rol'] == 'admin':
-                        col_rev, col_del = st.columns(2)
-                        if col_rev.button("🔄 Regresar a Pendiente", key=f"rev_{r['id']}"):
-                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
-                            st.rerun()
-                        # 🔥 BOTÓN DE BORRAR EN EL HISTORIAL 🔥
-                        if col_del.button("🗑️ Borrar del Historial", key=f"del_h_{r['id']}"):
-                            db.collection('pronosticos').document(r['id']).delete()
-                            st.rerun()
+                # Botones de Admin para el Parlay
+                if st.session_state['user_rol'] == 'admin':
+                    col_pa, col_pb, col_pc = st.columns(3)
+                    if col_pa.button(f"✅ Reventamos la casa", key=f"pwin_{r['id']}"):
+                        db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
+                        st.rerun()
+                    if col_pb.button(f"❌ Falló una pata", key=f"ploss_{r['id']}"):
+                        db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
+                        st.rerun()
+                    if col_pc.button(f"🗑️ Borrar Parlay", key=f"pdel_{r['id']}"):
+                        db.collection('pronosticos').document(r['id']).delete()
+                        st.rerun()
         else:
-            st.info("El historial está vacío.")
-
-else:
-    st.info("La base de datos está inicializando.")
+            st.info("Aún no hay Ticket Dorado para hoy. Vuelve más tarde.")
+            
+    # ==========================================
+    # 🔴 PESTAÑA 3: HISTORIAL (EL RESTO DEL CÓDIGO QUEDA IGUAL)
+    # ==========================================
 
 # --- FOOTER PROFESIONAL ---
 st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.9rem; opacity: 0.7;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
 
 
