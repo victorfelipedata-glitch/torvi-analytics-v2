@@ -86,7 +86,6 @@ docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.
 data_picks = [d.to_dict() for d in docs_picks]
 df = pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo'])
 
-# Rellenar datos para picks antiguos
 if not df.empty:
     if 'estatus' not in df.columns: df['estatus'] = 'PENDIENTE'
     if 'deporte' not in df.columns: df['deporte'] = 'Fútbol'
@@ -193,15 +192,18 @@ if not df.empty:
             if liga_seleccionada != "Todas las Ligas":
                 df_futbol = df_futbol[df_futbol['liga'] == liga_seleccionada]
 
-            # 🌟 GRÁFICA 3D ESPECTACULAR
+            # 🌟 GRÁFICA PLANA DE BURBUJAS (SCATTER 2D)
             if not df_futbol.empty:
-                st.markdown("<h4 style='text-align:center; color:#00f2ff; font-family:Orbitron;'>🛰️ ESCÁNER TRIDIMENSIONAL DE VALOR</h4>", unsafe_allow_html=True)
-                fig_3d = px.scatter_3d(df_futbol, x='prob_casa', y='prob_real', z='ev', 
-                                       color='mercado', size='cuota', hover_name='partido',
-                                       labels={'prob_casa': 'Prob. Casa (%)', 'prob_real': 'Prob. Real (%)', 'ev': 'EV+ (%)'},
-                                       template="plotly_dark", color_discrete_sequence=px.colors.sequential.Plasma)
-                fig_3d.update_layout(margin=dict(l=0, r=0, b=0, t=0), paper_bgcolor='rgba(0,0,0,0)', scene=dict(bgcolor='rgba(0,0,0,0)'))
-                st.plotly_chart(fig_3d, use_container_width=True)
+                st.markdown("<h4 style='text-align:center; color:#00f2ff; font-family:Orbitron; margin-top:20px;'>🛰️ MAPA DE VALOR (PROBABILIDADES VS EV+)</h4>", unsafe_allow_html=True)
+                fig_burbujas = px.scatter(
+                    df_futbol, x='prob_casa', y='prob_real', size='ev', color='ev',
+                    hover_name='partido', hover_data={'mercado': True, 'cuota': True, 'prob_casa': True, 'prob_real': True, 'ev': True},
+                    labels={'prob_casa': 'Prob. Implícita Casa (%)', 'prob_real': 'Prob. Real Estimada (%)', 'ev': 'Ventaja EV+ (%)'},
+                    template="plotly_dark", color_continuous_scale="Purp", size_max=35
+                )
+                fig_burbujas.update_layout(height=450, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=20, b=20))
+                fig_burbujas.update_traces(marker=dict(line=dict(width=2, color='#00f2ff')))
+                st.plotly_chart(fig_burbujas, use_container_width=True)
 
                 for i, r in df_futbol.iterrows():
                     sugerencia = bank_actual * 0.05 
@@ -377,3 +379,4 @@ st.markdown("""
         © 2026 DESARROLLADO POR VÍCTOR ANTONIO FELIPE MARTÍNEZ | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
