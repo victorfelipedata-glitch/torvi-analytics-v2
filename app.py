@@ -79,33 +79,38 @@ if st.sidebar.button("🚪 CERRAR SESIÓN", use_container_width=True):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- 🚀 PANEL DE ADMIN (Solo para Torvi) ---
+# --- 🚀 PANEL DE CONTROL (ADMIN) ---
 if st.session_state['user_rol'] == 'admin':
     st.markdown("### 🛠️ PANEL DE CONTROL (ADMIN)")
     with st.expander("➕ AGREGAR NUEVO ANÁLISIS AL RADAR"):
         with st.form("nuevo_pick"):
+            # 🔥 NUEVO SELECTOR DE TIPO DE PICK 🔥
+            tipo_pick = st.selectbox("📌 Tipo de Pronóstico:", ["Sencilla (Radar EV+)", "Parlay (La Soñadora)"])
+            
             col_p1, col_p2 = st.columns(2)
-            partido = col_p1.text_input("⚽ Partido:", placeholder="Ej: Real Madrid vs City")
-            mercado = col_p2.text_input("🎯 Mercado:", placeholder="Ej: +2.5 Goles")
+            partido = col_p1.text_input("⚽ Partido(s):", placeholder="Ej: Real Madrid vs City / Arsenal vs Porto")
+            mercado = col_p2.text_input("🎯 Mercado(s):", placeholder="Ej: +2.5 Goles en ambos")
             
             col_n1, col_n2, col_n3, col_n4 = st.columns(4)
-            cuota = col_n1.number_input("📈 Cuota:", min_value=1.01, value=1.90, step=0.01)
+            cuota = col_n1.number_input("📈 Cuota Total:", min_value=1.01, value=1.90, step=0.01)
             prob_casa = col_n2.number_input("🏦 Prob. Casa (%):", min_value=0.0, max_value=100.0, value=50.0, step=0.1)
             prob_real = col_n3.number_input("🎯 Prob. Real (%):", min_value=0.0, max_value=100.0, value=55.0, step=0.1)
             ev_val = col_n4.number_input("🔥 EV+ (%):", value=5.0, step=0.1)
             
-            ana = st.text_area("🧠 Análisis Táctico y Estadístico:")
+            ana = st.text_area("🧠 Análisis Táctico o Justificación del Parlay:")
             
-            if st.form_submit_button("🚀 PUBLICAR EN EL RADAR"):
+            if st.form_submit_button("🚀 PUBLICAR"):
                 pick_id = f"{int(time.time())}"
+                # Definimos si es parlay o sencilla para la base de datos
+                tipo_bd = 'parlay' if 'Parlay' in tipo_pick else 'sencilla'
+                
                 db.collection('pronosticos').document(pick_id).set({
-                    'id': pick_id, 'partido': partido, 'mercado': mercado, 'cuota': cuota,
+                    'id': pick_id, 'tipo': tipo_bd, 'partido': partido, 'mercado': mercado, 'cuota': cuota,
                     'prob_casa': prob_casa, 'prob_real': prob_real,
                     'ev': ev_val, 'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()
                 })
-                st.success("¡Análisis publicado con éxito!")
+                st.success(f"¡{tipo_pick} publicado con éxito!")
                 st.rerun()
-
 # --- DASHBOARD DE USUARIO ---
 st.markdown("<hr>", unsafe_allow_html=True)
 rol_display = "ADMINISTRADOR SUPREMO" if st.session_state['user_rol'] == 'admin' else "USUARIO VIP"
@@ -209,6 +214,7 @@ else:
 # --- FOOTER PROFESIONAL ---
 st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.9rem; opacity: 0.7;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
 
 
