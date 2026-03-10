@@ -6,6 +6,7 @@ import hashlib
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+import plotly.express as px
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="AXIOM DATA | Terminal", layout="wide")
@@ -22,7 +23,8 @@ st.markdown("""
     .titulo-axiom span { color: #3B82F6; }
     .subtitulo { color: #64748B; font-family: 'JetBrains Mono', monospace; text-align: center; letter-spacing: 2px; margin-bottom: 30px; font-size: 0.85rem; }
     
-    .pick-card { background-color: #111827; border: 1px solid #1E293B; border-radius: 12px; padding: 20px; margin-bottom: 15px; border-left: 4px solid #3B82F6; }
+    .pick-card { background-color: #111827; border: 1px solid #1E293B; border-radius: 12px; padding: 20px; margin-bottom: 15px; border-left: 4px solid #3B82F6; transition: transform 0.2s; }
+    .pick-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2); }
     .pick-card.vip { border-left: 4px solid #F59E0B; background: linear-gradient(145deg, #111827, #1A1500); border: 1px solid #453300; }
     
     .pick-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1E293B; padding-bottom: 10px; margin-bottom: 15px; }
@@ -37,13 +39,14 @@ st.markdown("""
     .kelly-box { background: rgba(59, 130, 246, 0.1); border: 1px solid #3B82F6; color: #60A5FA; padding: 10px; border-radius: 8px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; margin-bottom: 15px;}
     
     .stTabs [data-baseweb="tab-list"] { gap: 8px; background-color: transparent; }
-    .stTabs [data-baseweb="tab"] { background-color: #1E293B; border-radius: 8px 8px 0 0; color: #94A3B8; padding: 10px 20px; font-weight: 600; border: none; }
+    .stTabs [data-baseweb="tab"] { background-color: #1E293B; border-radius: 8px 8px 0 0; color: #94A3B8; padding: 10px 20px; font-weight: 600; border: none; transition: 0.3s; }
     .stTabs [aria-selected="true"] { background-color: #3B82F6 !important; color: white !important; border-bottom: none !important; }
     
     div[data-testid="stMetric"] { background-color: #111827; border: 1px solid #1E293B; border-radius: 10px; padding: 15px; box-shadow: none; }
     
-    /* Input custom para la inversión */
-    .stNumberInput input { background-color: #0F172A !important; color: #10B981 !important; border: 1px solid #1E293B !important; font-weight: bold; font-family: 'JetBrains Mono'; }
+    /* Botón de actualizar custom */
+    .btn-actualizar { background: linear-gradient(90deg, #3B82F6, #8B5CF6); border: none; color: white; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; font-family: 'Inter'; text-align: center; cursor: pointer; margin-bottom: 20px;}
+    .btn-actualizar:hover { opacity: 0.9; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -134,27 +137,31 @@ except Exception:
 
 df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
 
-# --- SIDEBAR LIMPIO ---
+# --- SIDEBAR LIMPIO E INTERACTIVO ---
 st.sidebar.markdown(f"<h3 style='color: #E2E8F0; font-family: Inter;'>👤 {user_email.split('@')[0]}</h3>", unsafe_allow_html=True)
 st.sidebar.markdown(f"<p style='color: #64748B; font-family: JetBrains Mono; font-size: 0.8rem;'>ROL: {st.session_state['user_rol'].upper()}</p>", unsafe_allow_html=True)
 st.sidebar.markdown("<hr style='border-color: #1E293B;'>", unsafe_allow_html=True)
-if st.sidebar.button("Cerrar Sesión"):
+
+# Botón de Actualizar Espectacular
+if st.sidebar.button("🔄 ACTUALIZAR DATOS", type="primary", use_container_width=True):
+    st.toast("Sincronizando con la red neuronal de Axiom...", icon="🛰️")
+    time.sleep(0.5)
+    st.rerun()
+    
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
+if st.sidebar.button("🚪 Cerrar Sesión", use_container_width=True):
     st.session_state['autenticado'] = False
     st.session_state['user_email'] = ''
     st.rerun()
 
-# --- FUNCIONES MATEMÁTICAS (CORREGIDAS: Quarter-Kelly + Tope 5%) ---
+# --- FUNCIONES MATEMÁTICAS ---
 def calcular_kelly(ev_pct, cuota, bankroll):
     if cuota <= 1 or ev_pct <= 0: return 0.0, 0.0
     p = (ev_pct / 100) + (1 / cuota) 
     b = cuota - 1
     kelly_frac = (p * b - (1 - p)) / b
-    
-    # Usamos Quarter-Kelly (25%) para absorber varianza
     quarter_kelly = max(0, kelly_frac * 0.25)
-    # Regla de oro: Jamás superar el 5% del bankroll
     pct_final = min(quarter_kelly, 0.05) 
-    
     inversion = bankroll * pct_final
     return inversion, pct_final * 100
 
@@ -172,13 +179,33 @@ if not df.empty:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    tabs = ["📡 RADAR", "💎 PARLAY VIP", "💼 MI PORTAFOLIO", "⚙️ PERFIL"]
+    tabs = ["📡 RADAR & VISUALIZACIÓN", "💎 PARLAY VIP", "💼 MI PORTAFOLIO", "⚙️ PERFIL & TOOLS"]
     if st.session_state['user_rol'] == 'admin': tabs.append("👑 ADMIN")
     paneles = st.tabs(tabs)
     
     # === PESTAÑA 1: RADAR (MERCADO GLOBAL) ===
     with paneles[0]:
         if not df_normales.empty:
+            
+            # --- NUEVO: GRÁFICO INTERACTIVO DE DISPERSIÓN ---
+            st.markdown("<h4 style='color: #E2E8F0; font-family: Inter;'>🌌 Mapeo de Oportunidades (Scatter EV+)</h4>", unsafe_allow_html=True)
+            # Aseguramos que los tipos de datos sean correctos para la gráfica
+            df_chart = df_normales.copy()
+            df_chart['cuota'] = pd.to_numeric(df_chart['cuota'])
+            df_chart['prob_real'] = pd.to_numeric(df_chart['prob_real'])
+            df_chart['ev'] = pd.to_numeric(df_chart['ev'])
+            
+            fig = px.scatter(df_chart, x="cuota", y="prob_real", size="ev", color="ev",
+                             hover_name="partido", hover_data=["mercado", "ev"],
+                             color_continuous_scale="Viridis", size_max=40,
+                             labels={"cuota": "Cuota Decimal", "prob_real": "Probabilidad Real (%)", "ev": "Ventaja (EV+)"})
+            fig.update_layout(plot_bgcolor='#0B0F19', paper_bgcolor='#0B0F19', font_color='#94A3B8', margin=dict(l=20, r=20, t=20, b=20))
+            fig.update_xaxes(showgrid=True, gridcolor='#1E293B')
+            fig.update_yaxes(showgrid=True, gridcolor='#1E293B')
+            st.plotly_chart(fig, use_container_width=True)
+            st.markdown("<hr style='border-color: #1E293B; margin-bottom: 30px;'>", unsafe_allow_html=True)
+
+            # Lista de Picks
             for i, r in df_normales.iterrows():
                 pid = r['id']
                 inv_recomendada, pct_bank = calcular_kelly(r.get('ev',0), r.get('cuota',1.01), base_bankroll)
@@ -202,7 +229,6 @@ if not df.empty:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # --- SISTEMA DE INVERSIÓN LIBRE ---
                 if pid in mis_picks_dict:
                     st.success(f"✅ En tu Portafolio (Apostaste: ${mis_picks_dict[pid].get('stake', 0):.2f})")
                 else:
@@ -300,7 +326,6 @@ if not df.empty:
                         </div>
                         """, unsafe_allow_html=True)
                     with c_del:
-                        # --- BOTÓN PARA ELIMINAR DEL PORTAFOLIO ---
                         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
                         if st.button("🗑️", key=f"del_{r['id']}", help="Eliminar de mi portafolio"):
                             try:
@@ -332,19 +357,39 @@ if not df.empty:
         else:
             st.info("Ve a la pestaña RADAR y añade pronósticos a tu portafolio.")
 
-    # === PESTAÑA 4: PERFIL ===
+    # === PESTAÑA 4: PERFIL & TOOLS ===
     with paneles[3]:
-        st.markdown("<h3 style='color: #E2E8F0; font-family: Inter;'>Configuración de Capital</h3>", unsafe_allow_html=True)
-        st.write("Axiom Data utiliza la fórmula Quarter-Kelly (max 5%) para calcular tu riesgo basado en tu Bankroll configurado.")
-        with st.form("form_bank"):
-            nuevo_b = st.number_input("Mi Bankroll Actual ($):", value=base_bankroll, step=50.0)
-            if st.form_submit_button("Actualizar Sistema"):
-                try:
-                    db.collection('usuarios').document(user_email).update({'bankroll': nuevo_b})
-                    st.success("Bankroll actualizado.")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception: st.error("Error guardando el bankroll.")
+        c_p1, c_p2 = st.columns(2)
+        
+        with c_p1:
+            st.markdown("<div class='pick-card'>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #E2E8F0; font-family: Inter;'>⚙️ Configuración de Capital</h3>", unsafe_allow_html=True)
+            st.write("Axiom Data utiliza la fórmula Quarter-Kelly (max 5%) para calcular tu riesgo basado en tu Bankroll.")
+            with st.form("form_bank"):
+                nuevo_b = st.number_input("Mi Bankroll Actual ($):", value=base_bankroll, step=50.0)
+                if st.form_submit_button("Actualizar Sistema", use_container_width=True):
+                    try:
+                        db.collection('usuarios').document(user_email).update({'bankroll': nuevo_b})
+                        st.success("Bankroll actualizado.")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception: st.error("Error guardando el bankroll.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with c_p2:
+            st.markdown("<div class='pick-card'>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #E2E8F0; font-family: Inter;'>🧮 Tool: Probabilidad Implícita</h3>", unsafe_allow_html=True)
+            st.write("Convierte cualquier cuota en su probabilidad matemática:")
+            cuota_test = st.number_input("Ingresa una cuota:", value=1.90, step=0.01)
+            prob_impl = (1 / cuota_test) * 100 if cuota_test > 0 else 0
+            st.markdown(f"<h2 style='color: #3B82F6; text-align: center;'>{prob_impl:.1f}%</h2>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        st.markdown("<hr style='border-color: #1E293B;'>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #64748B;'>🧠 Las Matemáticas detrás de Axiom Data</h4>", unsafe_allow_html=True)
+        st.write("Para encontrar el Valor Esperado (EV+), nuestro algoritmo utiliza la siguiente formulación matemática:")
+        st.latex(r"EV+ = (P_{real} \cdot Cuota) - 1")
+        st.write("Donde $P_{real}$ es la probabilidad dictada por nuestro modelo estadístico tras analizar variables del encuentro.")
 
     # === PESTAÑA 5: ADMIN ===
     if st.session_state['user_rol'] == 'admin':
@@ -394,4 +439,3 @@ if not df.empty:
 
 else:
     st.info("Conectado a la base de datos de Axiom. Esperando datos...")
-
