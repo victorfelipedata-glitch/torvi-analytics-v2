@@ -46,26 +46,61 @@ if 'user_rol' not in st.session_state: st.session_state['user_rol'] = 'invitado'
 st.markdown('<p class="titulo-futurista">AXIOM DATA</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
 
+# Lógica de Login/Registro Amigable
 if not st.session_state['autenticado']:
+    # Usamos session_state para alternar entre login y registro sin usar pestañas
+    if 'vista_registro' not in st.session_state:
+        st.session_state['vista_registro'] = False
+
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
-        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔐 ACCESO SEGURO</h3>", unsafe_allow_html=True)
-        t1, t2 = st.tabs(["🚀 INICIAR SESIÓN", "📝 SOLICITAR ACCESO"])
-        with t1:
+        # Tarjeta de bienvenida más amigable y limpia
+        st.markdown("""
+            <div style='background: rgba(10, 17, 40, 0.3); padding: 25px; border-radius: 15px; border: 1px solid rgba(0, 242, 255, 0.2); text-align: center; margin-bottom: 25px;'>
+                <h3 style='font-family: Orbitron; color: #00f2ff; margin-bottom: 5px; margin-top: 0px;'>👋 ¡Hola de nuevo!</h3>
+                <p style='color: #b3cce6; font-size: 0.95rem; margin-bottom: 0px;'>Ingresa para ver el radar de hoy.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # --- VISTA DE INICIO DE SESIÓN ---
+        if not st.session_state['vista_registro']:
             with st.form("f_login"):
-                u, p = st.text_input("Correo:"), st.text_input("Clave:", type="password")
-                if st.form_submit_button("ENTRAR", use_container_width=True):
+                u = st.text_input("Correo electrónico:")
+                p = st.text_input("Contraseña:", type="password")
+                if st.form_submit_button("Iniciar sesión", use_container_width=True):
                     res = db.collection('usuarios').document(u).get()
                     if res.exists and res.to_dict()['password'] == encriptar_password(p):
-                        st.session_state['autenticado'], st.session_state['user_rol'] = True, res.to_dict().get('rol', 'usuario_vip')
+                        st.session_state['autenticado'] = True
+                        st.session_state['user_rol'] = res.to_dict().get('rol', 'usuario_vip')
                         st.rerun()
-                    else: st.error("Credenciales incorrectas o acceso denegado.")
-        with t2:
+                    else: 
+                        st.error("Usuario y/o contraseña incorrecto.")
+            
+            st.markdown("<p style='text-align: center; color: #b3cce6; margin-top: 15px; font-size: 0.9rem;'>¿No tienes una cuenta?</p>", unsafe_allow_html=True)
+            if st.button("Crea tu cuenta aquí", use_container_width=True):
+                st.session_state['vista_registro'] = True
+                st.rerun()
+                
+        # --- VISTA DE REGISTRO ---
+        else:
             with st.form("f_reg"):
-                un, pn = st.text_input("Nuevo Correo:"), st.text_input("Nueva Clave:", type="password")
-                if st.form_submit_button("REGISTRARME", use_container_width=True):
-                    db.collection('usuarios').document(un).set({'correo': un, 'password': encriptar_password(pn), 'rol': 'usuario_vip'})
-                    st.success("¡Usuario creado! Ya puedes iniciar sesión.")
+                st.markdown("<p style='text-align: center; color: #bc13fe; font-family: Orbitron; font-weight: bold;'>ÚNETE A AXIOM ANALYTICS</p>", unsafe_allow_html=True)
+                un = st.text_input("Tu correo electrónico:")
+                pn = st.text_input("Crea una contraseña:", type="password")
+                if st.form_submit_button("Crear cuenta", use_container_width=True):
+                    # Verificamos que el correo no exista ya
+                    doc_ref = db.collection('usuarios').document(un).get()
+                    if doc_ref.exists:
+                        st.warning("Este correo ya está registrado. Intenta iniciar sesión.")
+                    else:
+                        db.collection('usuarios').document(un).set({'correo': un, 'password': encriptar_password(pn), 'rol': 'usuario_vip'})
+                        st.success("¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
+            
+            st.markdown("<p style='text-align: center; color: #b3cce6; margin-top: 15px; font-size: 0.9rem;'>¿Ya tienes una cuenta?</p>", unsafe_allow_html=True)
+            if st.button("Volver a iniciar sesión", use_container_width=True):
+                st.session_state['vista_registro'] = False
+                st.rerun()
+                
     st.stop()
 
 # --- CARGA DE DATOS DESDE FIREBASE ---
@@ -217,6 +252,7 @@ if not df.empty:
 # --- FOOTER PROFESIONAL ---
 st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.9rem; opacity: 0.7;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
 
 
