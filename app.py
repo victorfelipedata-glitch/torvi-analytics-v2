@@ -11,7 +11,7 @@ from datetime import datetime
 # 1. Configuración de página
 st.set_page_config(page_title="AXIOM DATA", layout="wide")
 
-# 2. Estilos CSS Personalizados (Axiom Design)
+# 2. Estilos CSS Personalizados
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -23,8 +23,6 @@ st.markdown("""
     div[data-testid="stMetric"] { background: rgba(10, 17, 40, 0.6); backdrop-filter: blur(10px); border: 1px solid #00f2ff; border-radius: 10px; text-align: center; }
     hr { border: 0; height: 2px; background: linear-gradient(90deg, transparent, #00f2ff, #bc13fe, transparent); }
     .stTextInput input, .stTextArea textarea, .stNumberInput input { background-color: rgba(0, 0, 0, 0.6) !important; color: #00f2ff !important; border: 1px solid rgba(188, 19, 254, 0.5) !important; }
-    
-    /* Estilo de pestañas VIP */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] { background-color: rgba(188, 19, 254, 0.05); border-radius: 10px 10px 0 0; color: #b3cce6; padding: 10px 20px; font-family: 'Orbitron'; }
     .stTabs [aria-selected="true"] { background-color: rgba(0, 242, 255, 0.1) !important; border-bottom: 2px solid #00f2ff !important; color: #00f2ff !important; }
@@ -44,6 +42,8 @@ def encriptar_password(password):
 # 4. Gestión de Sesión
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
 if 'user_rol' not in st.session_state: st.session_state['user_rol'] = 'invitado'
+if 'user_correo' not in st.session_state: st.session_state['user_correo'] = ''
+if 'editando_pick' not in st.session_state: st.session_state['editando_pick'] = None
 
 st.markdown('<p class="titulo-futurista">AXIOM DATA</p>', unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
@@ -53,19 +53,19 @@ if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
         st.markdown("<div style='text-align: center; padding: 20px; background: rgba(0,242,255,0.05); border-radius: 20px; border: 1px solid rgba(0,242,255,0.1);'>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center; font-family: Orbitron; color: #bc13fe;'>🔓 ACCESO AL RADAR</h3>", unsafe_allow_html=True)
-        
         t_login, t_reg = st.tabs(["🚀 INICIAR SESIÓN", "📝 REGISTRO"])
         with t_login:
             with st.form("login_form"):
-                u = st.text_input("Usuario (Correo):")
+                u = st.text_input("Correo:")
                 p = st.text_input("Clave:", type="password")
-                if st.form_submit_button("ENTRAR AL SISTEMA", use_container_width=True):
+                if st.form_submit_button("ENTRAR", use_container_width=True):
                     if u:
                         res = db.collection('usuarios').document(u).get()
                         if res.exists and res.to_dict()['password'] == encriptar_password(p):
                             st.session_state['autenticado'] = True
                             st.session_state['user_rol'] = res.to_dict().get('rol', 'usuario_vip')
+                            st.session_state['user_correo'] = u
+                            st.session_state['bank_inicial'] = res.to_dict().get('bank_inicial', 1000.0)
                             st.rerun()
                         else: st.error("Credenciales incorrectas.")
                     else: st.warning("Ingresa un usuario.")
@@ -73,45 +73,56 @@ if not st.session_state['autenticado']:
             with st.form("reg_form"):
                 un = st.text_input("Nuevo Correo:")
                 pn = st.text_input("Nueva Clave:", type="password")
-                if st.form_submit_button("CREAR CUENTA VIP", use_container_width=True):
+                if st.form_submit_button("CREAR CUENTA", use_container_width=True):
                     if un and pn:
-                        db.collection('usuarios').document(un).set({'correo': un, 'password': encriptar_password(pn), 'rol': 'usuario_vip'})
+                        db.collection('usuarios').document(un).set({'correo': un, 'password': encriptar_password(pn), 'rol': 'usuario_vip', 'bank_inicial': 1000.0})
                         st.success("¡Cuenta creada! Inicia sesión.")
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# 6. Carga de Datos y Limpieza
+# 6. Carga de Datos Globales y del Usuario
+# Picks globales
 docs = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
 data_list = []
 for d in docs:
     item = d.to_dict()
     if 'estatus' not in item: item['estatus'] = 'PENDIENTE'
-    # Limpiamos el ruido de los títulos viejos
-    item['partido'] = item['partido'].replace("[SENCILLA] ", "").replace("[Otra] ", "").replace("[OTRA] ", "")
+    item['partido'] = item['partido'].replace("[SENCILLA] ", "").replace("[Otra] ", "")
     data_list.append(item)
+df = pd.DataFrame(data_list) if data_list else pd.DataFrame(columns=['id', 'partido', 'mercado', 'cuota', 'ev', 'estatus'])
 
-df = pd.DataFrame(data_list) if data_list else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'ev', 'estatus'])
+# Picks del usuario (Portafolio personal)
+user_bets_docs = db.collection('apuestas_usuarios').where('correo', '==', st.session_state['user_correo']).stream()
+user_bets = {b.to_dict()['pick_id']: b.to_dict() for b in user_bets_docs}
 
-# 7. Sidebar
+# 7. Sidebar - CONFIGURACIÓN DEL USUARIO
 st.sidebar.markdown(f"### 🛡️ SESIÓN: {st.session_state['user_rol'].upper()}")
+st.sidebar.markdown(f"**Usuario:** {st.session_state['user_correo']}")
+
+with st.sidebar.expander("⚙️ Mi Configuración / Bank"):
+    nuevo_bank = st.number_input("Capital Inicial ($):", value=float(st.session_state.get('bank_inicial', 1000.0)))
+    if st.button("Actualizar Bank"):
+        db.collection('usuarios').document(st.session_state['user_correo']).update({'bank_inicial': nuevo_bank})
+        st.session_state['bank_inicial'] = nuevo_bank
+        st.success("Bank actualizado.")
+        st.rerun()
+
 if st.sidebar.button("🚪 CERRAR SESIÓN"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# 8. Panel Administrativo (Solo Admin)
+# 8. Panel Administrativo - PUBLICAR
 if st.session_state['user_rol'] == 'admin':
-    with st.expander("🛠️ PANEL DE CONTROL - PUBLICAR"):
+    with st.expander("🛠️ PANEL DE CONTROL - PUBLICAR NUEVO"):
         with st.form("admin_pick"):
             c1, c2 = st.columns(2)
             partido_in = c1.text_input("⚽ Encuentro:")
             mercado_in = c2.text_input("🎯 Mercado:")
-            
             cn1, cn2, cn3, cn4 = st.columns(4)
             cuota_in = cn1.number_input("📈 Cuota:", value=1.90, step=0.01)
             pcasa_in = cn2.number_input("🏦 Prob. Casa %:", value=50.0)
             preal_in = cn3.number_input("🎯 Prob. Real %:", value=55.0)
             ev_in = cn4.number_input("🔥 EV+ %:", value=5.0)
-            
             ana_in = st.text_area("🧠 Análisis Táctico:")
             if st.form_submit_button("🚀 LANZAR AL RADAR"):
                 pid = f"{int(time.time())}"
@@ -123,7 +134,22 @@ if st.session_state['user_rol'] == 'admin':
                 st.success("¡Pick publicado!")
                 st.rerun()
 
-# 9. Dashboard Principal
+# 9. Lógica de Bankroll Dinámico Personalizado
+bank_actual = st.session_state.get('bank_inicial', 1000.0)
+ganadas_personales = 0
+perdidas_personales = 0
+
+for pid, bet in user_bets.items():
+    if not df.empty and pid in df['id'].values:
+        estado_global = df[df['id'] == pid].iloc[0]['estatus']
+        if estado_global == 'GANADA':
+            bank_actual += bet['monto'] * (bet['cuota'] - 1)
+            ganadas_personales += 1
+        elif estado_global == 'PERDIDA':
+            bank_actual -= bet['monto']
+            perdidas_personales += 1
+
+# 10. Dashboard Principal
 st.markdown("<hr>", unsafe_allow_html=True)
 if not df.empty:
     df_activos = df[df['estatus'] == 'PENDIENTE']
@@ -134,11 +160,7 @@ if not df.empty:
     max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty else "0%"
     met1.metric("🔥 MÁXIMA VENTAJA", max_ev)
     met2.metric("🎯 PICKS ACTIVOS", len(df_activos))
-    
-    # Cálculo de Bank dinámico para darle vida a la UI
-    wins = len(df_historial[df_historial['estatus'] == 'GANADA'])
-    losses = len(df_historial[df_historial['estatus'] == 'PERDIDA'])
-    met3.metric("🏦 BANKROLL ESTIMADO", f"${1000 + (wins*85) - (losses*100):,.2f}")
+    met3.metric("🏦 MI CAPITAL (BANK)", f"${bank_actual:,.2f}")
 
     # ESTRUCTURA DE PESTAÑAS VIP
     t_futbol, t_parlay, t_hist, t_calc = st.tabs(["⚽ FÚTBOL", "💎 PARLAY VIP", "📈 RENDIMIENTO", "🧮 CALCULADORAS"])
@@ -149,71 +171,113 @@ if not df.empty:
                 if "PARLAY" not in r['partido'].upper():
                     with st.expander(f"📍 {r['partido']} | {r['mercado']} | EV+: {r['ev']}%"):
                         st.markdown(f"<p style='color: #bc13fe; font-size: 0.85rem;'>PROB. REAL: {r.get('prob_real',0)}% | CUOTA: {r['cuota']}</p>", unsafe_allow_html=True)
-                        st.write(r.get('analisis', 'Análisis táctico en proceso...'))
+                        st.write(r.get('analisis', 'Análisis en proceso...'))
+                        
+                        st.markdown("<hr style='margin: 10px 0; border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+                        
+                        # --- CONTROLES PARA USUARIOS (PORTAFOLIO) ---
+                        if r['id'] not in user_bets:
+                            col_i1, col_i2 = st.columns([2, 1])
+                            monto_apuesta = col_i1.number_input("💰 Inversión ($):", min_value=1.0, value=50.0, step=10.0, key=f"monto_{r['id']}")
+                            if col_i2.button("➕ Meter a mi Portafolio", key=f"add_{r['id']}"):
+                                db.collection('apuestas_usuarios').document(f"{st.session_state['user_correo']}_{r['id']}").set({
+                                    'correo': st.session_state['user_correo'], 'pick_id': r['id'], 'monto': monto_apuesta, 'cuota': float(r['cuota'])
+                                })
+                                st.rerun()
+                        else:
+                            st.success(f"✅ Ya invertiste **${user_bets[r['id']]['monto']}** en este pick.")
+                        
+                        # --- CONTROLES PARA ADMIN (RESOLVER / EDITAR) ---
                         if st.session_state['user_rol'] == 'admin':
-                            ca, cb = st.columns(2)
-                            if ca.button(f"✅ Ganada", key=f"w_{r['id']}"):
+                            st.markdown("<br><p style='color: #ffcc00; font-size: 0.8rem;'>🛠️ CONTROLES DE ADMIN:</p>", unsafe_allow_html=True)
+                            ca, cb, cc = st.columns(3)
+                            if ca.button(f"✅ Ganó", key=f"w_{r['id']}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
                                 st.rerun()
-                            if cb.button(f"❌ Perdida", key=f"l_{r['id']}"):
+                            if cb.button(f"❌ Perdió", key=f"l_{r['id']}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
                                 st.rerun()
+                            if cc.button(f"✏️ Editar", key=f"e_{r['id']}"):
+                                st.session_state['editando_pick'] = r['id']
+                                st.rerun()
+                            
+                            # FORMULARIO DE EDICIÓN
+                            if st.session_state.get('editando_pick') == r['id']:
+                                st.warning("Editando Pronóstico...")
+                                edit_cuota = st.number_input("Nueva Cuota:", value=float(r['cuota']), step=0.01, key=f"ec_{r['id']}")
+                                edit_ev = st.number_input("Nuevo EV+ %:", value=float(r['ev']), step=0.1, key=f"eev_{r['id']}")
+                                edit_ana = st.text_area("Análisis:", value=r.get('analisis',''), key=f"ea_{r['id']}")
+                                
+                                c_save, c_cancel = st.columns(2)
+                                if c_save.button("💾 Guardar Cambios", key=f"save_{r['id']}"):
+                                    db.collection('pronosticos').document(r['id']).update({
+                                        'cuota': edit_cuota, 'ev': edit_ev, 'analisis': edit_ana
+                                    })
+                                    st.session_state['editando_pick'] = None
+                                    st.rerun()
+                                if c_cancel.button("Cancelar", key=f"can_{r['id']}"):
+                                    st.session_state['editando_pick'] = None
+                                    st.rerun()
         else:
-            st.info("No hay señales de fútbol activas. Esperando ventaja estadística...")
+            st.info("Buscando nuevas ventajas en el mercado...")
 
+    # Pestaña Parlay
     with t_parlay:
-        st.markdown("<div style='background: linear-gradient(45deg, #1a0b2e, #bc13fe33); padding: 25px; border-radius: 15px; border: 1px solid #bc13fe; box-shadow: 0 0 20px rgba(188, 19, 254, 0.2);'>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center; color: #ffcc00; font-family: Orbitron; text-shadow: 0 0 10px #ffcc00;'>🎫 PARLAY DEL DÍA</h2>", unsafe_allow_html=True)
-        
         parlays_activos = df_activos[df_activos['partido'].str.contains("PARLAY", case=False)]
         if not parlays_activos.empty:
             for i, p in parlays_activos.iterrows():
                 st.markdown(f"### 🚀 {p['mercado']}")
                 st.markdown(f"**Cuota Combinada:** {p['cuota']} | **Ventaja:** {p['ev']}%")
-                st.success(p['analisis'])
+                st.success(p.get('analisis', ''))
+                # Lógica de seguir parlay
+                if p['id'] not in user_bets:
+                    monto_p = st.number_input("💰 Inversión ($):", value=50.0, key=f"monto_{p['id']}")
+                    if st.button("➕ Meter Parlay", key=f"add_{p['id']}"):
+                        db.collection('apuestas_usuarios').document(f"{st.session_state['user_correo']}_{p['id']}").set({
+                            'correo': st.session_state['user_correo'], 'pick_id': p['id'], 'monto': monto_p, 'cuota': float(p['cuota'])
+                        })
+                        st.rerun()
+                else:
+                    st.success(f"✅ Ya invertiste **${user_bets[p['id']]['monto']}** en este parlay.")
+                
+                # Admin controles parlay
                 if st.session_state['user_rol'] == 'admin':
-                    if st.button("✅ Resolver Parlay", key=f"wp_{p['id']}"):
+                    cpa, cpb = st.columns(2)
+                    if cpa.button(f"✅ Ganó Parlay", key=f"wp_{p['id']}"):
                         db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'})
                         st.rerun()
+                    if cpb.button(f"❌ Perdió Parlay", key=f"lp_{p['id']}"):
+                        db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'})
+                        st.rerun()
         else:
-            st.markdown("<p style='text-align: center; opacity: 0.6;'>Cocinando la combinada de alta ventaja... ⏳</p>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+            st.info("Cocinando la combinada de alta ventaja... ⏳")
 
+    # Pestaña Historial Personalizado
     with t_hist:
-        if not df_historial.empty:
-            h1, h2, h3 = st.columns(3)
-            h1.metric("✅ ACIERTOS", wins)
-            h2.metric("❌ FALLOS", losses)
-            h3.metric("📊 WIN RATE", f"{(wins/(wins+losses)*100) if (wins+losses)>0 else 0:.1f}%")
-            
-            st.markdown("#### ÚLTIMOS RESULTADOS")
-            for i, r in df_historial.iterrows():
-                status_icon = "🟢" if r['estatus'] == 'GANADA' else "🔴"
-                with st.expander(f"{status_icon} {r['partido']} | {r['mercado']}"):
-                    st.write(r['analisis'])
-        else:
-            st.info("Historial vacío. Las jugadas resueltas aparecerán aquí.")
+        h1, h2, h3 = st.columns(3)
+        h1.metric("✅ ACIERTOS", ganadas_personales)
+        h2.metric("❌ FALLOS", perdidas_personales)
+        h3.metric("📊 WIN RATE", f"{(ganadas_personales/(ganadas_personales+perdidas_personales)*100) if (ganadas_personales+perdidas_personales)>0 else 0:.1f}%")
+        
+        st.markdown("#### TUS RESULTADOS HISTÓRICOS")
+        hay_historial = False
+        for pid, bet in user_bets.items():
+            if not df_historial.empty and pid in df_historial['id'].values:
+                hay_historial = True
+                pick_data = df_historial[df_historial['id'] == pid].iloc[0]
+                status_icon = "🟢" if pick_data['estatus'] == 'GANADA' else "🔴"
+                ganancia = (bet['monto'] * (bet['cuota'] - 1)) if pick_data['estatus'] == 'GANADA' else -bet['monto']
+                with st.expander(f"{status_icon} {pick_data['partido']} | {pick_data['mercado']}"):
+                    st.write(f"Invertiste: ${bet['monto']} | Resultado: **${ganancia:+.2f}**")
+        if not hay_historial:
+            st.info("Aún no tienes resultados resueltos en tu portafolio personal.")
 
     with t_calc:
         st.markdown("### 🧮 GESTIÓN DE RIESGO")
-        c_kelly, c_hedge = st.columns(2)
-        with c_kelly:
-            st.markdown("#### Criterio de Kelly")
-            k_bank = st.number_input("Bankroll ($):", value=1000)
-            k_cuota = st.number_input("Cuota:", value=2.0)
-            k_prob = st.number_input("Probabilidad Real (%):", value=55.0)
-            if st.button("Calcular Stake"):
-                p = k_prob/100
-                q = 1 - p
-                b = k_cuota - 1
-                f = (b * p - q) / b
-                st.write(f"Inversión recomendada: **{f*100:.2f}%** del bank (${k_bank*f:.2f})")
-        with c_hedge:
-            st.markdown("#### Cobertura (Hedge)")
-            st.write("Calcula cuánto apostar a la contra para asegurar ganancias.")
-            # Aquí podrías poner campos básicos de hedge
+        # Aquí van tus calculadoras...
+
 else:
     st.info("Axiom Data está sincronizando con los mercados mundiales...")
 
-# 10. Footer
+# 11. Footer
 st.markdown("<br><br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
