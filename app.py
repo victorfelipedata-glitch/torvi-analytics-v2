@@ -29,12 +29,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXIÓN A FIREBASE ---
-if not firebase_admin._apps:
-    dict_claves = json.loads(st.secrets["firebase_key"])
-    cred = credentials.Certificate(dict_claves)
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
+# --- CONEXIÓN A FIREBASE (BLINDADA) ---
+try:
+    if not firebase_admin._apps:
+        dict_claves = json.loads(st.secrets["firebase_key"])
+        cred = credentials.Certificate(dict_claves)
+        firebase_admin.initialize_app(cred)
+    db = firestore.client()
+except Exception:
+    st.error("Error conectando a los servidores. Contacta al soporte.")
+    st.stop()
 
 def encriptar_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -61,47 +65,62 @@ if not st.session_state['autenticado']:
                 u = st.text_input("Correo electrónico:")
                 p = st.text_input("Contraseña:", type="password")
                 if st.form_submit_button("INICIAR SESIÓN", use_container_width=True):
-                    if u: 
-                        res = db.collection('usuarios').document(u).get()
-                        if res.exists and res.to_dict().get('password') == encriptar_password(p):
-                            st.session_state['autenticado'] = True
-                            st.session_state['user_rol'] = res.to_dict().get('rol', 'usuario_vip')
-                            st.session_state['user_email'] = u  # Guardamos el correo en sesión
-                            st.rerun()
-                        else: st.error("Credenciales incorrectas. Verifica tu correo y clave.")
+                    if u.strip(): 
+                        try:
+                            res = db.collection('usuarios').document(u).get()
+                            if res.exists and res.to_dict().get('password') == encriptar_password(p):
+                                st.session_state['autenticado'] = True
+                                st.session_state['user_rol'] = res.to_dict().get('rol', 'usuario_vip')
+                                st.session_state['user_email'] = u
+                                st.rerun()
+                            else: st.error("Credenciales incorrectas. Verifica tu correo y clave.")
+                        except Exception:
+                            st.error("Hubo un error de conexión temporal. Intenta nuevamente.")
                     else: st.warning("Por favor, ingresa tu correo electrónico.")
         with t2:
             with st.form("f_reg"):
                 un = st.text_input("Nuevo Correo:")
                 pn = st.text_input("Nueva Contraseña:", type="password")
                 if st.form_submit_button("REGISTRARME AHORA", use_container_width=True):
-                    if un and pn:
-                        # Creamos el usuario con un bankroll inicial por defecto de 1000
-                        db.collection('usuarios').document(un).set({
-                            'correo': un, 
-                            'password': encriptar_password(pn), 
-                            'rol': 'usuario_vip',
-                            'bankroll': 1000.0
-                        })
-                        st.success("¡Cuenta creada! Ya puedes iniciar sesión.")
+                    if un.strip() and pn.strip():
+                        try:
+                            db.collection('usuarios').document(un).set({
+                                'correo': un, 
+                                'password': encriptar_password(pn), 
+                                'rol': 'usuario_vip',
+                                'bankroll': 1000.0
+                            })
+                            st.success("¡Cuenta creada! Ya puedes iniciar sesión.")
+                        except Exception:
+                            st.error("No se pudo crear la cuenta. Intenta más tarde.")
                     else: st.warning("Completa todos los campos para continuar.")
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# --- RECUPERAR DATOS DEL USUARIO ---
-user_doc = db.collection('usuarios').document(st.session_state['user_email']).get()
-user_data = user_doc.to_dict() if user_doc.exists else {}
-base_bankroll = float(user_data.get('bankroll', 1000.0))
+# --- RECUPERAR DATOS DEL USUARIO (BLINDADO) ---
+base_bankroll = 1000.0
+user_email_actual = st.session_state.get('user_email', '').strip()
 
-# --- CARGA DE PRONÓSTICOS ---
-docs = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
+if user_email_actual:
+    try:
+        user_doc = db.collection('usuarios').document(user_email_actual).get()
+        if user_doc.exists:
+            base_bankroll = float(user_doc.to_dict().get('bankroll', 1000.0))
+    except Exception:
+        pass # Si falla (ej. documento borrado), no se rompe la app, asume bankroll 1000
+
+# --- CARGA DE PRONÓSTICOS (BLINDADA) ---
 data = []
-for d in docs:
-    item = d.to_dict()
-    if 'estatus' not in item: item['estatus'] = 'PENDIENTE'
-    data.append(item)
+try:
+    docs = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
+    for d in docs:
+        item = d.to_dict()
+        if 'estatus' not in item: item['estatus'] = 'PENDIENTE'
+        data.append(item)
+except Exception:
+    pass # Si la colección pronosticos aún no existe, simplemente creará una tabla vacía sin errores
 
-df = pd.DataFrame(data) if data else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
+df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
 
 # --- SIDEBAR ---
 st.sidebar.title("📟 CONSOLA")
@@ -129,14 +148,18 @@ if st.session_state['user_rol'] == 'admin':
             
             ana = st.text_area("🧠 Análisis Táctico y Matemático:")
             if st.form_submit_button("🚀 PUBLICAR EN EL RADAR"):
-                p_id = f"{int(time.time())}"
-                db.collection('pronosticos').document(p_id).set({
-                    'id': p_id, 'partido': partido, 'mercado': mercado, 'cuota': cuota,
-                    'prob_casa': prob_casa, 'prob_real': prob_real, 'ev': ev_val,
-                    'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()
-                })
-                st.success("¡Publicado con éxito!")
-                st.rerun()
+                try:
+                    p_id = f"{int(time.time())}"
+                    db.collection('pronosticos').document(p_id).set({
+                        'id': p_id, 'partido': partido, 'mercado': mercado, 'cuota': cuota,
+                        'prob_casa': prob_casa, 'prob_real': prob_real, 'ev': ev_val,
+                        'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()
+                    })
+                    st.success("¡Publicado con éxito!")
+                    time.sleep(1)
+                    st.rerun()
+                except Exception:
+                    st.error("No se pudo publicar. Verifica tu conexión a Firebase.")
 
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
@@ -144,13 +167,17 @@ if not df.empty:
     df_activos = df[df['estatus'] == 'PENDIENTE']
     df_historial = df[df['estatus'] != 'PENDIENTE']
     
-    # Separamos normales de parlays
-    df_normales = df_activos[~df_activos['partido'].str.contains("Parlay", case=False, na=False)]
-    df_parlays = df_activos[df_activos['partido'].str.contains("Parlay", case=False, na=False)]
+    # Separamos normales de parlays de forma segura
+    if 'partido' in df_activos.columns:
+        df_normales = df_activos[~df_activos['partido'].str.contains("Parlay", case=False, na=False)]
+        df_parlays = df_activos[df_activos['partido'].str.contains("Parlay", case=False, na=False)]
+    else:
+        df_normales = pd.DataFrame()
+        df_parlays = pd.DataFrame()
 
     # Métricas Top
     m1, m2, m3 = st.columns(3)
-    max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty else "0%"
+    max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty and 'ev' in df_activos.columns else "0%"
     m1.metric("🔥 MAYOR VENTAJA", max_ev)
     m2.metric("🎯 OPORTUNIDADES ACTIVAS", len(df_activos))
     m3.metric("🏦 BANKROLL ACTUAL", f"${base_bankroll:,.2f}")
@@ -162,20 +189,23 @@ if not df.empty:
     with tab_futbol:
         if not df_normales.empty:
             for i, r in df_normales.iterrows():
-                # Limpiamos basurita visual como [SENCILLA] o [Otra]
-                titulo_limpio = str(r['partido']).replace("[SENCILLA]", "").replace("[Otra]", "").strip()
-                with st.expander(f"📍 {titulo_limpio} | {r['mercado']} | EV+: {r['ev']}%"):
-                    st.markdown(f"<p style='color: #bc13fe; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}% | 📈 Cuota: {r['cuota']}</p>", unsafe_allow_html=True)
+                titulo_limpio = str(r.get('partido','')).replace("[SENCILLA]", "").replace("[Otra]", "").strip()
+                with st.expander(f"📍 {titulo_limpio} | {r.get('mercado','')} | EV+: {r.get('ev',0)}%"):
+                    st.markdown(f"<p style='color: #bc13fe; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}% | 📈 Cuota: {r.get('cuota',0)}</p>", unsafe_allow_html=True)
                     st.write(r.get('analisis', 'Análisis en proceso...'))
                     if st.session_state['user_rol'] == 'admin':
                         st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
                         ca, cb = st.columns(2)
-                        if ca.button(f"✅ Ganada", key=f"w_n_{r['id']}"):
-                            db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
-                            st.rerun()
-                        if cb.button(f"❌ Perdida", key=f"l_n_{r['id']}"):
-                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
-                            st.rerun()
+                        if ca.button(f"✅ Ganada", key=f"w_n_{r.get('id', i)}"):
+                            try:
+                                db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
+                                st.rerun()
+                            except Exception: pass
+                        if cb.button(f"❌ Perdida", key=f"l_n_{r.get('id', i)}"):
+                            try:
+                                db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
+                                st.rerun()
+                            except Exception: pass
         else:
             st.info("No hay señales individuales activas. El radar está buscando nuevas ventajas...")
 
@@ -195,9 +225,9 @@ if not df.empty:
                 with st.container():
                     st.markdown(f"""
                         <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00; margin-bottom: 15px;'>
-                            <h4 style='color: #ffcc00; margin-bottom: 10px; font-family: Orbitron;'>{str(p['partido']).replace("[PARLAY]", "").strip()}</h4>
-                            <p style='color: white; font-size: 1.1rem; margin-bottom: 5px;'>🎯 <b>Mercado:</b> {p['mercado']}</p>
-                            <p style='color: #00f2ff; font-weight: bold; font-size: 1.1rem; margin-bottom: 15px;'>📈 CUOTA FINAL: {p['cuota']} &nbsp;|&nbsp; 🔥 EV+: {p['ev']}%</p>
+                            <h4 style='color: #ffcc00; margin-bottom: 10px; font-family: Orbitron;'>{str(p.get('partido','')).replace("[PARLAY]", "").strip()}</h4>
+                            <p style='color: white; font-size: 1.1rem; margin-bottom: 5px;'>🎯 <b>Mercado:</b> {p.get('mercado','')}</p>
+                            <p style='color: #00f2ff; font-weight: bold; font-size: 1.1rem; margin-bottom: 15px;'>📈 CUOTA FINAL: {p.get('cuota',0)} &nbsp;|&nbsp; 🔥 EV+: {p.get('ev',0)}%</p>
                             <div style='background: rgba(0,0,0,0.5); padding: 15px; border-radius: 8px; color: #e0e0e0;'>
                                 {p.get('analisis', '')}
                             </div>
@@ -206,12 +236,16 @@ if not df.empty:
                     
                     if st.session_state['user_rol'] == 'admin':
                         ca, cb = st.columns(2)
-                        if ca.button(f"✅ Parlay Acertado", key=f"w_p_{p['id']}"):
-                            db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'})
-                            st.rerun()
-                        if cb.button(f"❌ Parlay Fallado", key=f"l_p_{p['id']}"):
-                            db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'})
-                            st.rerun()
+                        if ca.button(f"✅ Parlay Acertado", key=f"w_p_{p.get('id', i)}"):
+                            try:
+                                db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'})
+                                st.rerun()
+                            except Exception: pass
+                        if cb.button(f"❌ Parlay Fallado", key=f"l_p_{p.get('id', i)}"):
+                            try:
+                                db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'})
+                                st.rerun()
+                            except Exception: pass
         else:
             st.info("El equipo de analistas está terminando de procesar la combinada de hoy. Vuelve en unos minutos...")
 
@@ -231,13 +265,15 @@ if not df.empty:
             for i, r in df_historial.iterrows():
                 icon = "✅" if r['estatus'] == 'GANADA' else "❌"
                 color = "#00ff00" if r['estatus'] == 'GANADA' else "#ff0000"
-                with st.expander(f"{icon} {r['partido']} | {r['mercado']}"):
-                    st.markdown(f"<p style='color: {color}; font-weight: bold;'>CUOTA: {r['cuota']} | EV+: {r['ev']}%</p>", unsafe_allow_html=True)
+                with st.expander(f"{icon} {r.get('partido','')} | {r.get('mercado','')}"):
+                    st.markdown(f"<p style='color: {color}; font-weight: bold;'>CUOTA: {r.get('cuota',0)} | EV+: {r.get('ev',0)}%</p>", unsafe_allow_html=True)
                     st.write(r.get('analisis', ''))
                     if st.session_state['user_rol'] == 'admin':
-                        if st.button("🔄 Revertir Estado", key=f"rev_{r['id']}"):
-                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
-                            st.rerun()
+                        if st.button("🔄 Revertir Estado", key=f"rev_{r.get('id', i)}"):
+                            try:
+                                db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
+                                st.rerun()
+                            except Exception: pass
         else:
             st.info("El historial aparecerá aquí conforme se resuelvan los partidos.")
 
@@ -246,24 +282,26 @@ if not df.empty:
         st.markdown("<h3 style='color: #00f2ff; font-family: Orbitron;'>⚙️ CONFIGURACIÓN DE CUENTA</h3>", unsafe_allow_html=True)
         st.write(f"**Usuario activo:** {st.session_state['user_email']}")
         
-        # Formulario para actualizar el Bankroll en Firebase
         with st.form("form_bankroll"):
             nuevo_bank = st.number_input("Capital Inicial (Bankroll Fijo):", value=base_bankroll, step=10.0)
             submit_bank = st.form_submit_button("💾 Guardar Cambios")
             
             if submit_bank:
-                db.collection('usuarios').document(st.session_state['user_email']).update({
-                    'bankroll': nuevo_bank
-                })
-                st.success("¡Bankroll actualizado y guardado en la nube con éxito!")
-                time.sleep(1.5)
-                st.rerun()
+                if user_email_actual:
+                    try:
+                        db.collection('usuarios').document(user_email_actual).update({'bankroll': nuevo_bank})
+                        st.success("¡Bankroll guardado con éxito!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception:
+                        st.error("Error al guardar. Asegúrate de estar registrado correctamente.")
                 
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("<h3 style='color: #ffcc00; font-family: Orbitron;'>🧮 CALCULADORAS VIP</h3>", unsafe_allow_html=True)
-        st.info("Herramientas de gestión de riesgo (Kelly, Cashout) en construcción...")
+        st.info("Herramientas de gestión de riesgo en construcción...")
 
 else:
-    st.info("Base de datos conectada. Esperando primer análisis...")
+    st.info("Base de datos conectada y lista. Esperando primer análisis del Admin...")
 
-st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR AXIOM DATA | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
