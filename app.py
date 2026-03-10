@@ -12,6 +12,15 @@ import uuid
 # Configuro mi página
 st.set_page_config(page_title="AXIOM DATA", layout="wide")
 
+# Ligas Globales
+LIGAS_FUTBOL = [
+    "Champions League", "Europa League", "Conference League", 
+    "Liga Inglesa", "Championship", "Liga Española", 
+    "Liga Italiana", "Liga Alemana", "Liga Francesa", 
+    "Liga Portuguesa", "Liga Países Bajos", "Liga MX", 
+    "Liga Turca", "Liga Dinamarca", "Liga Grecia", "Liga Árabe", "Otra"
+]
+
 # CSS Estilo Galáctico con Glassmorphism
 st.markdown("""
     <style>
@@ -93,8 +102,8 @@ for d in docs:
     item = d.to_dict()
     if 'estatus' not in item: item['estatus'] = 'PENDIENTE'
     if 'id' not in item: item['id'] = str(uuid.uuid4()) 
-    if 'deporte' not in item: item['deporte'] = 'Fútbol' # Picks viejos se van a Fútbol
-    if 'liga' not in item: item['liga'] = 'Otra' # Picks viejos se van a "Otra"
+    if 'deporte' not in item: item['deporte'] = 'Fútbol' 
+    if 'liga' not in item: item['liga'] = 'Otra' 
     data.append(item)
 
 df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'deporte', 'liga', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
@@ -107,7 +116,6 @@ if not df.empty:
 st.sidebar.title("📟 CONSOLA")
 st.sidebar.write(f"Usuario: {st.session_state['user_rol'].upper()}")
 
-# 🔥 NUEVO BOTÓN DE ACTUALIZAR GIGANTE EN EL SIDEBAR 🔥
 if st.sidebar.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
     st.rerun()
 
@@ -117,15 +125,7 @@ if st.sidebar.button("🚪 CERRAR SESIÓN"):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- PANEL DE ADMIN ---
-LIGAS_FUTBOL = [
-    "Champions League", "Europa League", "Conference League", 
-    "Liga Inglesa", "Championship", "Liga Española", 
-    "Liga Italiana", "Liga Alemana", "Liga Francesa", 
-    "Liga Portuguesa", "Liga Países Bajos", "Liga MX", 
-    "Liga Turca", "Liga Dinamarca", "Liga Grecia", "Liga Árabe", "Otra"
-]
-
+# --- PANEL DE ADMIN (CREAR) ---
 if st.session_state['user_rol'] == 'admin':
     with st.expander("🛠️ PANEL DE CONTROL (AGREGAR PRONÓSTICO)"):
         with st.form("nuevo_pick"):
@@ -167,7 +167,6 @@ if not df.empty:
     m2.metric("🎯 OPORTUNIDADES ACTIVAS", len(df_activos))
     m3.metric("🏦 TU CAPITAL ACTUAL", "$1000.00")
     
-    # 🔥 ESTRUCTURA DE PESTAÑAS POR DEPORTE Y RENDIMIENTO 🔥
     tab_futbol, tab_nba, tab_historial = st.tabs(["⚽ FÚTBOL", "🏀 NBA", "📖 HISTORIAL GLOBAL"])
     
     # ==========================
@@ -177,7 +176,6 @@ if not df.empty:
         df_futbol = df_activos[df_activos['deporte'] == 'Fútbol']
         
         if not df_futbol.empty:
-            # 🔥 FILTRO DE LIGAS 🔥
             ligas_presentes = sorted(df_futbol['liga'].unique().tolist())
             liga_seleccionada = st.selectbox("🔍 FILTRAR POR LIGA:", ["TODAS"] + ligas_presentes)
             
@@ -198,14 +196,48 @@ if not df.empty:
                         st.markdown(f"<p style='color: #00f2ff; font-size: 0.8rem; text-transform: uppercase;'>🏆 {r.get('liga', 'Fútbol')}</p>", unsafe_allow_html=True)
                         st.markdown(f"<p style='color: #bc13fe; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}%</p>", unsafe_allow_html=True)
                         st.write(r.get('analisis', 'Análisis en proceso...'))
+                        
+                        # CONTROLES ADMIN (EDITAR, BORRAR, RESOLVER)
                         if st.session_state['user_rol'] == 'admin':
-                            ca, cb = st.columns(2)
+                            st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                            
+                            # Botones Rápidos
+                            ca, cb, cc = st.columns([1,1,1])
                             if ca.button(f"✅ Ganada", key=f"w_f_{r['id']}_{i}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
                                 st.rerun()
                             if cb.button(f"❌ Perdida", key=f"l_f_{r['id']}_{i}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
                                 st.rerun()
+                            if cc.button(f"🗑️ Borrar Pick", key=f"del_f_{r['id']}_{i}"):
+                                db.collection('pronosticos').document(r['id']).delete()
+                                st.rerun()
+                                
+                            # Formulario de Edición
+                            with st.expander("✏️ Editar Pick (Solo Admin)"):
+                                with st.form(f"edit_form_{r['id']}"):
+                                    try: idx_liga = LIGAS_FUTBOL.index(r.get('liga', 'Otra'))
+                                    except ValueError: idx_liga = LIGAS_FUTBOL.index("Otra")
+                                    
+                                    e_lig = st.selectbox("Liga:", LIGAS_FUTBOL, index=idx_liga)
+                                    e_part = st.text_input("Partido:", value=r.get('partido', ''))
+                                    e_merc = st.text_input("Mercado:", value=r.get('mercado', ''))
+                                    
+                                    ec1, ec2, ec3, ec4 = st.columns(4)
+                                    e_cuo = ec1.number_input("Cuota:", value=float(r.get('cuota', 1.90)), step=0.01)
+                                    e_pc = ec2.number_input("Prob Casa:", value=float(r.get('prob_casa', 50.0)))
+                                    e_pr = ec3.number_input("Prob Real:", value=float(r.get('prob_real', 50.0)))
+                                    e_ev = ec4.number_input("EV+:", value=float(r.get('ev', 5.0)))
+                                    
+                                    e_ana = st.text_area("Análisis:", value=r.get('analisis', ''))
+                                    
+                                    if st.form_submit_button("💾 Guardar Cambios"):
+                                        db.collection('pronosticos').document(r['id']).update({
+                                            'liga': e_lig, 'partido': e_part, 'mercado': e_merc,
+                                            'cuota': float(e_cuo), 'prob_casa': float(e_pc), 
+                                            'prob_real': float(e_pr), 'ev': float(e_ev), 'analisis': e_ana
+                                        })
+                                        st.rerun()
             else:
                 st.info(f"No hay oportunidades activas en la liga: {liga_seleccionada}")
         else:
@@ -229,13 +261,18 @@ if not df.empty:
                 with st.expander(f"🏀 {r.get('partido', 'Partido')} | {r.get('mercado', 'Mercado')} | EV+: {r.get('ev', 0)}%"):
                     st.markdown(f"<p style='color: #ff9900; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}%</p>", unsafe_allow_html=True)
                     st.write(r.get('analisis', ''))
+                    
                     if st.session_state['user_rol'] == 'admin':
-                        ca, cb = st.columns(2)
+                        st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                        ca, cb, cc = st.columns([1,1,1])
                         if ca.button(f"✅ Ganada", key=f"w_n_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
                             st.rerun()
                         if cb.button(f"❌ Perdida", key=f"l_n_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
+                            st.rerun()
+                        if cc.button(f"🗑️ Borrar", key=f"del_n_{r['id']}_{i}"):
+                            db.collection('pronosticos').document(r['id']).delete()
                             st.rerun()
         else:
             st.info("Aún no inicia la cobertura de la duela. Esperando picks de NBA...")
@@ -256,12 +293,16 @@ if not df.empty:
             
             for i, r in df_historial.iterrows():
                 icon = "✅" if r['estatus'] == 'GANADA' else "❌"
-                with st.expander(f"{icon} [{r.get('deporte', 'General')}] {r.get('partido', '')} | {r.get('mercado', '')}"):
+                with st.expander(f"{icon} [{r.get('liga', 'General')}] {r.get('partido', '')} | {r.get('mercado', '')}"):
                     st.write(f"Cuota: {r.get('cuota', 0)} | Ventaja: {r.get('ev', 0)}%")
                     st.write(r.get('analisis', ''))
                     if st.session_state['user_rol'] == 'admin':
-                        if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}_{i}"):
+                        ca, cb = st.columns(2)
+                        if ca.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
+                            st.rerun()
+                        if cb.button("🗑️ Borrar del Historial", key=f"del_h_{r['id']}_{i}"):
+                            db.collection('pronosticos').document(r['id']).delete()
                             st.rerun()
         else:
             st.info("El historial aparecerá aquí conforme se resuelvan los partidos.")
@@ -270,4 +311,3 @@ else:
     st.info("Base de datos vacía. Esperando primer análisis...")
 
 st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
-
