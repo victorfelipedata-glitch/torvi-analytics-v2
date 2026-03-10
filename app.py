@@ -102,13 +102,19 @@ df = pd.DataFrame([d.to_dict() for d in docs]) if docs else pd.DataFrame()
 if not df.empty and 'liga' not in df.columns: df['liga'] = 'Competición Global'
 if not df.empty and 'tipo' not in df.columns: df['tipo'] = 'sencilla'
 
-# Cargar jugadas personales del usuario
+# Cargar jugadas personales del usuario (SOLO SI ESTÁ AUTENTICADO)
 user_email = st.session_state['usuario_actual']
-docs_jugadas = db.collection('usuarios').document(user_email).collection('mis_jugadas').stream()
-mis_jugadas = {d.id: d.to_dict() for d in docs_jugadas}
-user_data = db.collection('usuarios').document(user_email).get().to_dict()
-bank_inicial = user_data.get('bank_inicial', 1000.0)
+mis_jugadas = {}
+bank_inicial = 1000.0
 
+if st.session_state['autenticado'] and user_email != '':
+    user_doc = db.collection('usuarios').document(user_email).get()
+    if user_doc.exists:
+        user_data = user_doc.to_dict()
+        bank_inicial = float(user_data.get('bank_inicial', 1000.0))
+        
+    docs_jugadas = db.collection('usuarios').document(user_email).collection('mis_jugadas').stream()
+    mis_jugadas = {d.id: d.to_dict() for d in docs_jugadas}
 # Calcular el Bankroll Actual del Usuario basado en sus jugadas
 bank_actual = bank_inicial
 historial_grafica = [{"fecha": datetime.now().strftime("%Y-%m-%d"), "bank": bank_inicial}] # Para la gráfica
@@ -342,6 +348,7 @@ else:
 # --- FOOTER ---
 st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.9rem; opacity: 0.7;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
 
 
