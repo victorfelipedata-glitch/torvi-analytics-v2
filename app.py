@@ -112,13 +112,9 @@ if not df.empty:
     df['ev'] = pd.to_numeric(df['ev'], errors='coerce').fillna(0)
     df['cuota'] = pd.to_numeric(df['cuota'], errors='coerce').fillna(0)
 
-# --- SIDEBAR (CONSOLA Y ACTUALIZAR) ---
+# --- SIDEBAR (SOLO PARA CERRAR SESIÓN AHORA) ---
 st.sidebar.title("📟 CONSOLA")
 st.sidebar.write(f"Usuario: {st.session_state['user_rol'].upper()}")
-
-if st.sidebar.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
-    st.rerun()
-
 st.sidebar.markdown("<hr>", unsafe_allow_html=True)
 
 if st.sidebar.button("🚪 CERRAR SESIÓN"):
@@ -156,6 +152,13 @@ if st.session_state['user_rol'] == 'admin':
 
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
+
+# 🔥 BOTÓN DE ACTUALIZAR EN LA PANTALLA PRINCIPAL 🔥
+col_espacio, col_btn = st.columns([3, 1])
+with col_btn:
+    if st.button("🔄 ACTUALIZAR", type="primary", use_container_width=True):
+        st.rerun()
+
 if not df.empty:
     df_activos = df[df['estatus'] == 'PENDIENTE']
     df_historial = df[df['estatus'] != 'PENDIENTE']
@@ -201,7 +204,6 @@ if not df.empty:
                         if st.session_state['user_rol'] == 'admin':
                             st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
                             
-                            # Botones Rápidos
                             ca, cb, cc = st.columns([1,1,1])
                             if ca.button(f"✅ Ganada", key=f"w_f_{r['id']}_{i}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
@@ -209,11 +211,10 @@ if not df.empty:
                             if cb.button(f"❌ Perdida", key=f"l_f_{r['id']}_{i}"):
                                 db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
                                 st.rerun()
-                            if cc.button(f"🗑️ Borrar Pick", key=f"del_f_{r['id']}_{i}"):
+                            if cc.button(f"🗑️ Borrar", key=f"del_f_{r['id']}_{i}"):
                                 db.collection('pronosticos').document(r['id']).delete()
                                 st.rerun()
                                 
-                            # Formulario de Edición
                             with st.expander("✏️ Editar Pick (Solo Admin)"):
                                 with st.form(f"edit_form_{r['id']}"):
                                     try: idx_liga = LIGAS_FUTBOL.index(r.get('liga', 'Otra'))
