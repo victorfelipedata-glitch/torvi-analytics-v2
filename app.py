@@ -163,31 +163,84 @@ if st.session_state['user_rol'] == 'admin':
 
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
-col_espacio, col_btn = st.columns([3, 1])
-with col_btn:
-    if st.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
-        st.rerun()
-
 if not df.empty:
+    # Filtros de estado
     df_activos = df[df['estatus'] == 'PENDIENTE']
     df_historial = df[df['estatus'] != 'PENDIENTE']
 
+    # Métricas de la parte superior
     m1, m2, m3 = st.columns(3)
     max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty else "0%"
-    m1.metric("🔥 MAYOR VENTAJA", max_ev)
-    m2.metric("🎯 OPORTUNIDADES ACTIVAS", len(df_activos))
+    m1.metric("🔥 MÁXIMA VENTAJA", max_ev)
+    m2.metric("🎯 PICKS ACTIVOS", len(df_activos))
+    # Bankroll dinámico basado en historial
+    ganancias = len(df_historial[df_historial['estatus'] == 'GANADA']) * 80 # Asumiendo ganancia promedio
+    perdidas = len(df_historial[df_historial['estatus'] == 'PERDIDA']) * 100
+    bank_total = 1000 + ganancias - perdidas
+    m3.metric("🏦 MI CAPITAL (BANK)", f"${bank_total:,.2f}")
     
-    # Cálculo de Bankroll Dinámico basado en historial (Unidad base = 100)
-    bankroll_inicial = 1000.0
-    profit_actual = 0.0
-    if not df_historial.empty:
-        for _, row in df_historial.iterrows():
-            if row['estatus'] == 'GANADA':
-                profit_actual += (row['cuota'] - 1) * 100
-            elif row['estatus'] == 'PERDIDA':
-                profit_actual -= 100
+    # NUEVA ESTRUCTURA DE PESTAÑAS VIP
+    tab_futbol, tab_parlay, tab_historial, tab_tools = st.tabs(["⚽ FÚTBOL", "💎 PARLAY DIARIO", "📈 RENDIMIENTO", "🧮 TOOLS"])
     
-    m3.metric("🏦 BANKROLL", f"${bankroll_inicial + profit_actual:,.2f}", f"{profit_actual:+,.2f} USD")
+    with tab_futbol:
+        if not df_activos.empty:
+            st.markdown("<h4 style='color: #00f2ff; font-family: Orbitron;'>🛰️ RADAR DE SEÑALES</h4>", unsafe_allow_html=True)
+            for i, r in df_activos.iterrows():
+                # Limpiamos el título quitando [SENCILLA] o etiquetas raras
+                titulo_limpio = r['partido'].replace("[SENCILLA] ", "").replace("[Otra] ", "")
+                with st.expander(f"📍 {titulo_limpio} | {r['mercado']} | EV+: {r['ev']}%"):
+                    st.markdown(f"<p style='color: #bc13fe; font-size: 0.85rem;'>PROB. REAL: {r.get('prob_real',0)}% | CUOTA: {r['cuota']}</p>", unsafe_allow_html=True)
+                    st.info(r.get('analisis', 'Analizando datos tácticos...'))
+                    if st.session_state['user_rol'] == 'admin':
+                        ca, cb = st.columns(2)
+                        if ca.button(f"✅ Ganó", key=f"w_{r['id']}"):
+                            db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
+                            st.rerun()
+                        if cb.button(f"❌ Perdió", key=f"l_{r['id']}"):
+                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
+                            st.rerun()
+        else:
+            st.info("Buscando nuevas ventajas en las ligas europeas...")
+
+    with tab_parlay:
+        st.markdown("<div style='background: linear-gradient(45deg, #1a0b2e, #bc13fe33); padding: 20px; border-radius: 15px; border: 1px solid #bc13fe;'>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center; color: #ffcc00; font-family: Orbitron;'>⭐ PARLAY VIP DEL DÍA</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: white;'>Esta sección solo es visible para miembros con acceso de alta ventaja.</p>", unsafe_allow_html=True)
+        
+        # Aquí puedes filtrar por picks que tengan la palabra "Parlay" en el nombre
+        df_parlays = df_activos[df_activos['partido'].str.contains("Parlay", case=False)]
+        if not df_parlays.empty:
+            for i, p in df_parlays.iterrows():
+                st.success(f"🚀 {p['mercado']} - Momio: {p['cuota']}")
+                st.write(p['analisis'])
+        else:
+            st.markdown("<p style='text-align: center; opacity: 0.5;'>Cocinando la combinada de hoy... ⏳</p>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with tab_historial:
+        if not df_historial.empty:
+            # Gráfica de crecimiento
+            ganadas = len(df_historial[df_historial['estatus'] == 'GANADA'])
+            perdidas = len(df_historial[df_historial['estatus'] == 'PERDIDA'])
+            wr = (ganadas/(ganadas+perdidas))*100 if (ganadas+perdidas)>0 else 0
+            
+            st.markdown(f"### Win Rate Global: {wr:.1f}%")
+            # Gráfica simple de barras por estatus
+            resumen = df_historial.groupby('estatus').size().reset_index(name='cantidad')
+            fig_h = px.pie(resumen, values='cantidad', names='estatus', color='estatus',
+                           color_discrete_map={'GANADA': '#00ff00', 'PERDIDA': '#ff0000'},
+                           hole=0.4, template="plotly_dark")
+            st.plotly_chart(fig_h, use_container_width=True)
+        else:
+            st.info("El historial se construye con tus aciertos.")
+
+    with tab_tools:
+        st.markdown("### 🧮 CALCULADORAS DE GESTIÓN")
+        # Aquí pones el código de tus calculadoras de Kelly y Hedge que ya tienes
+        st.write("Usa estas herramientas para proteger tu capital.")
+
+else:
+    st.info("Bienvenido a Axiom Data. Esperando actualización del radar...")
     
     # 🔥 PESTAÑAS (NUEVAS HERRAMIENTAS VIP) 🔥
     tab_futbol, tab_nba, tab_herramientas, tab_historial = st.tabs(["⚽ FÚTBOL", "🏀 NBA", "🧮 HERRAMIENTAS VIP", "📖 HISTORIAL Y DATA"])
@@ -323,4 +376,5 @@ else:
     st.info("Base de datos vacía.")
 
 st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
