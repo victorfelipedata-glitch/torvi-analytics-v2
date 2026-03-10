@@ -44,7 +44,7 @@ if 'autenticado' not in st.session_state: st.session_state['autenticado'] = Fals
 if 'user_rol' not in st.session_state: st.session_state['user_rol'] = 'invitado'
 
 st.markdown('<p class="titulo-futurista">AXIOM DATA</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
 
 if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -209,6 +209,7 @@ else:
 # --- FOOTER PROFESIONAL ---
 st.markdown("<br><br><br><hr>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.9rem; opacity: 0.7;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
 
 
