@@ -7,7 +7,7 @@ import hashlib
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
-import uuid # 👈 Nueva librería para generar IDs únicos infalibles
+import uuid
 
 # Configuro mi página
 st.set_page_config(page_title="AXIOM DATA", layout="wide")
@@ -23,7 +23,7 @@ st.markdown("""
     [data-testid="stForm"], div.stExpander { background: rgba(10, 17, 40, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(0, 242, 255, 0.2); border-radius: 15px; }
     div[data-testid="stMetric"] { background: rgba(10, 17, 40, 0.6); backdrop-filter: blur(10px); border: 1px solid #00f2ff; border-radius: 10px; text-align: center; }
     hr { border: 0; height: 2px; background: linear-gradient(90deg, transparent, #00f2ff, #bc13fe, transparent); }
-    .stTextInput input, .stTextArea textarea, .stNumberInput input { background-color: rgba(0, 0, 0, 0.6) !important; color: #00f2ff !important; border: 1px solid rgba(188, 19, 254, 0.5) !important; }
+    .stTextInput input, .stTextArea textarea, .stNumberInput input, .stSelectbox div[data-baseweb="select"] { background-color: rgba(0, 0, 0, 0.6) !important; color: #00f2ff !important; border: 1px solid rgba(188, 19, 254, 0.5) !important; }
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] { background-color: rgba(188, 19, 254, 0.1); border-radius: 10px 10px 0 0; color: white; padding: 10px 20px; }
     .stTabs [aria-selected="true"] { background-color: rgba(0, 242, 255, 0.2) !important; border-bottom: 2px solid #00f2ff !important; }
@@ -60,7 +60,6 @@ if not st.session_state['autenticado']:
                 u = st.text_input("Correo electrónico:")
                 p = st.text_input("Contraseña:", type="password")
                 if st.form_submit_button("INICIAR SESIÓN", use_container_width=True):
-                    # 👈 CORRECCIÓN 1: Evitar consulta vacía para quitar el error rojo
                     u_limpio = u.strip()
                     if u_limpio: 
                         try:
@@ -87,36 +86,56 @@ if not st.session_state['autenticado']:
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# --- CARGA DE DATOS ---
+# --- CARGA DE DATOS Y RETROCOMPATIBILIDAD ---
 docs = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
 data = []
 for d in docs:
     item = d.to_dict()
     if 'estatus' not in item: item['estatus'] = 'PENDIENTE'
-    if 'id' not in item: item['id'] = str(uuid.uuid4()) # ID de respaldo por si falta
+    if 'id' not in item: item['id'] = str(uuid.uuid4()) 
+    if 'deporte' not in item: item['deporte'] = 'Fútbol' # Picks viejos se van a Fútbol
+    if 'liga' not in item: item['liga'] = 'Otra' # Picks viejos se van a "Otra"
     data.append(item)
 
-df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
+df = pd.DataFrame(data) if data else pd.DataFrame(columns=['id', 'deporte', 'liga', 'partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus'])
 
-# 👈 CORRECCIÓN 2: Forzar números para que la gráfica no explote
 if not df.empty:
     df['ev'] = pd.to_numeric(df['ev'], errors='coerce').fillna(0)
     df['cuota'] = pd.to_numeric(df['cuota'], errors='coerce').fillna(0)
 
-# --- SIDEBAR ---
+# --- SIDEBAR (CONSOLA Y ACTUALIZAR) ---
 st.sidebar.title("📟 CONSOLA")
 st.sidebar.write(f"Usuario: {st.session_state['user_rol'].upper()}")
+
+# 🔥 NUEVO BOTÓN DE ACTUALIZAR GIGANTE EN EL SIDEBAR 🔥
+if st.sidebar.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
+    st.rerun()
+
+st.sidebar.markdown("<hr>", unsafe_allow_html=True)
+
 if st.sidebar.button("🚪 CERRAR SESIÓN"):
     st.session_state['autenticado'] = False
     st.rerun()
 
 # --- PANEL DE ADMIN ---
+LIGAS_FUTBOL = [
+    "Champions League", "Europa League", "Conference League", 
+    "Liga Inglesa", "Championship", "Liga Española", 
+    "Liga Italiana", "Liga Alemana", "Liga Francesa", 
+    "Liga Portuguesa", "Liga Países Bajos", "Liga MX", 
+    "Liga Turca", "Liga Dinamarca", "Liga Grecia", "Liga Árabe", "Otra"
+]
+
 if st.session_state['user_rol'] == 'admin':
     with st.expander("🛠️ PANEL DE CONTROL (AGREGAR PRONÓSTICO)"):
         with st.form("nuevo_pick"):
+            c_cat1, c_cat2 = st.columns(2)
+            deporte = c_cat1.selectbox("🏆 Deporte:", ["Fútbol", "NBA"])
+            liga = c_cat2.selectbox("🌍 Liga / Torneo:", LIGAS_FUTBOL) if deporte == "Fútbol" else c_cat2.selectbox("🌍 Torneo:", ["Temporada Regular NBA", "Playoffs NBA"])
+            
             c_a, c_b = st.columns(2)
-            partido = c_a.text_input("⚽ Encuentro:", placeholder="Ej: Man City vs Liverpool")
-            mercado = c_b.text_input("🎯 Mercado:", placeholder="Ej: +4.5 Tiros a Puerta")
+            partido = c_a.text_input("⚽/🏀 Encuentro:", placeholder="Ej: Man City vs Liverpool o Lakers vs Bulls")
+            mercado = c_b.text_input("🎯 Mercado:", placeholder="Ej: +4.5 Tiros a Puerta o Lebron +25.5 Pts")
             
             c_n1, c_n2, c_n3, c_n4 = st.columns(4)
             cuota = c_n1.number_input("📈 Cuota:", min_value=1.01, value=1.90, step=0.01)
@@ -126,10 +145,9 @@ if st.session_state['user_rol'] == 'admin':
             
             ana = st.text_area("🧠 Análisis Táctico y Matemático:")
             if st.form_submit_button("🚀 PUBLICAR EN EL RADAR"):
-                # 👈 CORRECCIÓN 3: Generar un ID verdaderamente único
                 p_id = str(uuid.uuid4())
                 db.collection('pronosticos').document(p_id).set({
-                    'id': p_id, 'partido': partido, 'mercado': mercado, 'cuota': float(cuota),
+                    'id': p_id, 'deporte': deporte, 'liga': liga, 'partido': partido, 'mercado': mercado, 'cuota': float(cuota),
                     'prob_casa': float(prob_casa), 'prob_real': float(prob_real), 'ev': float(ev_val),
                     'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()
                 })
@@ -142,41 +160,89 @@ if not df.empty:
     df_activos = df[df['estatus'] == 'PENDIENTE']
     df_historial = df[df['estatus'] != 'PENDIENTE']
 
-    # Métricas
+    # Métricas Globales
     m1, m2, m3 = st.columns(3)
     max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty else "0%"
-    m1.metric("🔥 MAYOR VENTAJA (EV+)", max_ev)
+    m1.metric("🔥 MAYOR VENTAJA GLOBAL", max_ev)
     m2.metric("🎯 OPORTUNIDADES ACTIVAS", len(df_activos))
     m3.metric("🏦 TU CAPITAL ACTUAL", "$1000.00")
     
-    tab_radar, tab_historial = st.tabs(["🛰️ RADAR DE VALOR", "📖 HISTORIAL Y RENDIMIENTO"])
+    # 🔥 ESTRUCTURA DE PESTAÑAS POR DEPORTE Y RENDIMIENTO 🔥
+    tab_futbol, tab_nba, tab_historial = st.tabs(["⚽ FÚTBOL", "🏀 NBA", "📖 HISTORIAL GLOBAL"])
     
-    with tab_radar:
-        if not df_activos.empty:
-            try:
-                fig = px.bar(df_activos, x='ev', y='mercado', orientation='h', color='ev', 
-                             template="plotly_dark", labels={'ev': 'Ventaja %', 'mercado': 'Mercado'})
-                fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-                st.plotly_chart(fig, use_container_width=True)
-            except Exception as e:
-                st.warning("Ajustando gráfica... Se recuperará en el próximo pick.")
+    # ==========================
+    # ⚽ PESTAÑA: FÚTBOL
+    # ==========================
+    with tab_futbol:
+        df_futbol = df_activos[df_activos['deporte'] == 'Fútbol']
+        
+        if not df_futbol.empty:
+            # 🔥 FILTRO DE LIGAS 🔥
+            ligas_presentes = sorted(df_futbol['liga'].unique().tolist())
+            liga_seleccionada = st.selectbox("🔍 FILTRAR POR LIGA:", ["TODAS"] + ligas_presentes)
+            
+            if liga_seleccionada != "TODAS":
+                df_futbol = df_futbol[df_futbol['liga'] == liga_seleccionada]
+                
+            if not df_futbol.empty:
+                try:
+                    fig = px.bar(df_futbol, x='ev', y='mercado', orientation='h', color='ev', 
+                                 template="plotly_dark", labels={'ev': 'Ventaja %', 'mercado': 'Mercado'})
+                    fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig, use_container_width=True)
+                except:
+                    pass
 
-            for i, r in df_activos.iterrows():
-                with st.expander(f"📌 {r.get('partido', 'Partido')} | {r.get('mercado', 'Mercado')} | EV+: {r.get('ev', 0)}%"):
-                    st.markdown(f"<p style='color: #bc13fe; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}%</p>", unsafe_allow_html=True)
-                    st.write(r.get('analisis', 'Análisis en proceso...'))
+                for i, r in df_futbol.iterrows():
+                    with st.expander(f"📌 {r.get('partido', 'Partido')} | {r.get('mercado', 'Mercado')} | EV+: {r.get('ev', 0)}%"):
+                        st.markdown(f"<p style='color: #00f2ff; font-size: 0.8rem; text-transform: uppercase;'>🏆 {r.get('liga', 'Fútbol')}</p>", unsafe_allow_html=True)
+                        st.markdown(f"<p style='color: #bc13fe; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}%</p>", unsafe_allow_html=True)
+                        st.write(r.get('analisis', 'Análisis en proceso...'))
+                        if st.session_state['user_rol'] == 'admin':
+                            ca, cb = st.columns(2)
+                            if ca.button(f"✅ Ganada", key=f"w_f_{r['id']}_{i}"):
+                                db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
+                                st.rerun()
+                            if cb.button(f"❌ Perdida", key=f"l_f_{r['id']}_{i}"):
+                                db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
+                                st.rerun()
+            else:
+                st.info(f"No hay oportunidades activas en la liga: {liga_seleccionada}")
+        else:
+            st.info("No hay señales de fútbol activas en este momento.")
+
+    # ==========================
+    # 🏀 PESTAÑA: NBA
+    # ==========================
+    with tab_nba:
+        df_nba = df_activos[df_activos['deporte'] == 'NBA']
+        if not df_nba.empty:
+            try:
+                fig_nba = px.bar(df_nba, x='ev', y='mercado', orientation='h', color='ev', 
+                             template="plotly_dark", color_continuous_scale="Oranges")
+                fig_nba.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_nba, use_container_width=True)
+            except:
+                pass
+
+            for i, r in df_nba.iterrows():
+                with st.expander(f"🏀 {r.get('partido', 'Partido')} | {r.get('mercado', 'Mercado')} | EV+: {r.get('ev', 0)}%"):
+                    st.markdown(f"<p style='color: #ff9900; font-size: 0.9rem;'>🏦 Prob. Casa: {r.get('prob_casa',0)}% | 🎯 Prob. Real: {r.get('prob_real',0)}%</p>", unsafe_allow_html=True)
+                    st.write(r.get('analisis', ''))
                     if st.session_state['user_rol'] == 'admin':
                         ca, cb = st.columns(2)
-                        # 👈 CORRECCIÓN 4: Claves (keys) únicas para cada botón usando el índice 'i'
-                        if ca.button(f"✅ Ganada", key=f"w_{r['id']}_{i}"):
+                        if ca.button(f"✅ Ganada", key=f"w_n_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'})
                             st.rerun()
-                        if cb.button(f"❌ Perdida", key=f"l_{r['id']}_{i}"):
+                        if cb.button(f"❌ Perdida", key=f"l_n_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'})
                             st.rerun()
         else:
-            st.info("No hay señales activas. El radar está buscando nuevas ventajas...")
+            st.info("Aún no inicia la cobertura de la duela. Esperando picks de NBA...")
 
+    # ==========================
+    # 📖 PESTAÑA: HISTORIAL
+    # ==========================
     with tab_historial:
         if not df_historial.empty:
             ganadas = len(df_historial[df_historial['estatus'] == 'GANADA'])
@@ -190,11 +256,11 @@ if not df.empty:
             
             for i, r in df_historial.iterrows():
                 icon = "✅" if r['estatus'] == 'GANADA' else "❌"
-                with st.expander(f"{icon} {r.get('partido', '')} | {r.get('mercado', '')}"):
+                with st.expander(f"{icon} [{r.get('deporte', 'General')}] {r.get('partido', '')} | {r.get('mercado', '')}"):
                     st.write(f"Cuota: {r.get('cuota', 0)} | Ventaja: {r.get('ev', 0)}%")
                     st.write(r.get('analisis', ''))
                     if st.session_state['user_rol'] == 'admin':
-                        if st.button("🔄 Revertir", key=f"rev_{r['id']}_{i}"):
+                        if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}_{i}"):
                             db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
                             st.rerun()
         else:
@@ -204,3 +270,4 @@ else:
     st.info("Base de datos vacía. Esperando primer análisis...")
 
 st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR TORVI ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
