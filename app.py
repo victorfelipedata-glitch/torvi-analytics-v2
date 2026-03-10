@@ -49,7 +49,7 @@ st.markdown("""
         <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/38bce5a4aa1f6ebf5cf113ebf193f03547f1dd2c/logo.jpg" width="350" style="border-radius: 15px; box-shadow: 0px 0px 25px rgba(188, 19, 254, 0.5);">
     </div>
     """, unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
 
 if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -278,4 +278,5 @@ else:
     st.info("Base de datos vacía. Esperando primer análisis...")
 
 st.markdown("<br><hr><p style='text-align: center; color: #00f2ff; font-family: Orbitron; font-size: 0.8rem; opacity: 0.6;'>© 2026 DESARROLLADO POR QUASAR ANALYTICS | DATA & FORESIGHT</p>", unsafe_allow_html=True)
+
 
