@@ -11,7 +11,7 @@ from datetime import datetime
 # Configuro mi página
 st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
 
-# CSS Estilo Galáctico, Botones Premium y Glassmorphism
+# CSS Estilo Galáctico
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -25,8 +25,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] { background-color: rgba(188, 19, 254, 0.1); border-radius: 10px 10px 0 0; color: white; padding: 10px 20px; transition: all 0.3s ease;}
     .stTabs [aria-selected="true"] { background-color: rgba(0, 242, 255, 0.2) !important; border-bottom: 2px solid #00f2ff !important; text-shadow: 0 0 10px #00f2ff;}
-    /* Estilo para el botón de actualizar */
-    button[kind="primary"] { background: linear-gradient(45deg, #ff3366, #ff9933) !important; color: white !important; font-weight: bold !important; border: none !important; border-radius: 8px !important; box-shadow: 0 0 15px rgba(255,51,102,0.4) !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -86,8 +84,13 @@ if not st.session_state['autenticado']:
 docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
 data_picks = [d.to_dict() for d in docs_picks]
 df = pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte'])
-if not df.empty and 'estatus' not in df.columns: df['estatus'] = 'PENDIENTE'
-if not df.empty and 'deporte' not in df.columns: df['deporte'] = 'Fútbol' # Default para picks viejos
+
+# Rescate de datos antiguos: Llenamos vacíos para que no desaparezcan
+if not df.empty:
+    if 'estatus' not in df.columns: df['estatus'] = 'PENDIENTE'
+    if 'deporte' not in df.columns: df['deporte'] = 'Fútbol'
+    df['estatus'] = df['estatus'].fillna('PENDIENTE')
+    df['deporte'] = df['deporte'].fillna('Fútbol')
 
 docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).stream()
 df_port = pd.DataFrame([d.to_dict() for d in docs_port]) if docs_port else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto'])
@@ -97,7 +100,7 @@ bank_actual = user_ref.get().to_dict().get('bankroll', 1000.0) if user_ref.get()
 
 # --- BARRA SUPERIOR: ACTUALIZAR Y LOGOUT ---
 col_head1, col_head2, col_head3 = st.columns([6, 2, 2])
-if col_head2.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
+if col_head2.button("🔄 ACTUALIZAR RADAR", use_container_width=True):
     st.toast("Actualizando datos del servidor...")
     time.sleep(0.5)
     st.rerun()
@@ -107,7 +110,7 @@ if col_head3.button("🚪 CERRAR SESIÓN", use_container_width=True):
 
 # --- PANEL DE ADMIN INTACTO ---
 if st.session_state['user_rol'] == 'admin':
-    with st.expander("🛠️ PANEL DE CONTROL (AGREGAR PRONÓSTICO)"):
+    with st.expander("🛠️ EDITOR Y PANEL DE CONTROL (ADMIN)"):
         with st.form("nuevo_pick"):
             c_a, c_b, c_c = st.columns([2, 2, 1])
             partido = c_a.text_input("⚽/🏀 Encuentro:", placeholder="Ej: Man City vs Liverpool")
@@ -134,8 +137,8 @@ if st.session_state['user_rol'] == 'admin':
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
 if not df.empty:
-    df_activos = df[df['estatus'].fillna('PENDIENTE') == 'PENDIENTE']
-    df_historial = df[df['estatus'].fillna('PENDIENTE') != 'PENDIENTE']
+    df_activos = df[df['estatus'] == 'PENDIENTE']
+    df_historial = df[df['estatus'] != 'PENDIENTE']
 
     # Métricas Pro
     m1, m2, m3 = st.columns(3)
@@ -151,9 +154,10 @@ if not df.empty:
     with tab_futbol:
         df_futbol = df_activos[(df_activos['deporte'] == 'Fútbol') & (~df_activos['partido'].str.contains("Parlay", case=False, na=False))]
         if not df_futbol.empty:
-            # 📊 GRÁFICA DE RADAR DE REGRESO
-            fig = px.bar(df_futbol, x='ev', y='mercado', orientation='h', color='ev', template="plotly_dark", color_continuous_scale="Purp")
-            fig.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=10))
+            # 📊 GRÁFICA DE RADAR (Con altura dinámica para que no se vea como bloque)
+            altura_grafica = max(200, len(df_futbol) * 60)
+            fig = px.bar(df_futbol, x='ev', y='mercado', orientation='h', color='ev', template="plotly_dark", color_continuous_scale="Viridis")
+            fig.update_layout(height=altura_grafica, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', margin=dict(t=10, b=10))
             st.plotly_chart(fig, use_container_width=True)
 
             for i, r in df_futbol.iterrows():
@@ -188,9 +192,10 @@ if not df.empty:
                 st.markdown("</div>", unsafe_allow_html=True)
 
                 if st.session_state['user_rol'] == 'admin':
-                    c_wa, c_wb = st.columns(2)
-                    if c_wa.button(f"✅ Marcar Ganada", key=f"w_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'}); st.rerun()
-                    if c_wb.button(f"❌ Marcar Perdida", key=f"l_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                    c_wa, c_wb, c_wc = st.columns(3)
+                    if c_wa.button(f"✅ Ganada", key=f"w_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'}); st.rerun()
+                    if c_wb.button(f"❌ Perdida", key=f"l_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                    if c_wc.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
                 st.markdown("<hr style='opacity: 0.2;'>", unsafe_allow_html=True)
         else:
             st.info("El radar de fútbol está despejado.")
@@ -199,8 +204,7 @@ if not df.empty:
     with tab_nba:
         df_nba = df_activos[(df_activos['deporte'] == 'NBA') & (~df_activos['partido'].str.contains("Parlay", case=False, na=False))]
         if not df_nba.empty:
-            st.success("Hay pronósticos de NBA activos. (Misma lógica visual que Fútbol)")
-            # Aquí se replicaría el mismo for loop de fútbol para la NBA si tuvieras picks
+            st.success("Pronósticos de NBA listos.")
         else:
             st.info("Aún no inicia la cobertura de la duela.")
 
@@ -224,12 +228,13 @@ if not df.empty:
                     </div>
                 """, unsafe_allow_html=True)
                 if st.session_state['user_rol'] == 'admin':
-                    c_pa, c_pb = st.columns(2)
-                    if c_pa.button(f"✅ Cobrar Parlay", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
+                    c_pa, c_pb, c_pc = st.columns(3)
+                    if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
                     if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                    if c_pc.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
                 st.markdown("<br>", unsafe_allow_html=True)
         else:
-            st.info("Cocinado la combinada perfecta del día...")
+            st.info("Cocinando la combinada perfecta del día...")
 
     # --- 💼 PESTAÑA PORTAFOLIO ---
     with tab_port:
@@ -254,10 +259,25 @@ if not df.empty:
             c_h2.metric("❌ FALLOS", perdidas)
             c_h3.metric("📈 WIN RATE", f"{wr:.1f}%")
             
-            # 📊 GRÁFICA DE PASTEL DE REGRESO
+            # 📊 GRÁFICAS DEL HISTORIAL
+            c_g1, c_g2 = st.columns(2)
             resumen = df_historial.groupby('estatus').size().reset_index(name='cantidad')
-            fig_h = px.pie(resumen, values='cantidad', names='estatus', color='estatus', color_discrete_map={'GANADA': '#00ff00', 'PERDIDA': '#ff0000'}, hole=0.4, template="plotly_dark")
-            st.plotly_chart(fig_h, use_container_width=True)
+            fig_pie = px.pie(resumen, values='cantidad', names='estatus', color='estatus', color_discrete_map={'GANADA': '#00ff00', 'PERDIDA': '#ff0000'}, hole=0.4, template="plotly_dark", title="Rendimiento Global")
+            c_g1.plotly_chart(fig_pie, use_container_width=True)
+            
+            # Gráfica de línea simulando crecimiento
+            df_historial_ordenado = df_historial.sort_values(by='fecha')
+            crecimiento = []
+            dinero = 0
+            for estatus in df_historial_ordenado['estatus']:
+                if estatus == 'GANADA': dinero += 80
+                elif estatus == 'PERDIDA': dinero -= 100
+                crecimiento.append(dinero)
+            df_historial_ordenado['crecimiento'] = crecimiento
+            
+            fig_line = px.line(df_historial_ordenado, x='fecha', y='crecimiento', template="plotly_dark", title="Curva de Beneficio")
+            fig_line.update_traces(line_color='#00f2ff')
+            c_g2.plotly_chart(fig_line, use_container_width=True)
             
             for i, r in df_historial.iterrows():
                 icon = "✅ GANADA" if r['estatus'] == 'GANADA' else "❌ PERDIDA"
@@ -281,10 +301,6 @@ if not df.empty:
             st.success("¡Datos sincronizados con éxito!")
             time.sleep(1)
             st.rerun()
-            
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("### 🧮 CALCULADORAS VIP")
-        st.info("Aquí irán tus calculadoras de Criterio de Kelly y Cobertura (Hedge).")
 
 else:
     st.info("Base de datos vacía. Esperando primer análisis del núcleo...")
@@ -296,5 +312,6 @@ st.markdown("""
         © 2026 DESARROLLADO POR VÍCTOR ANTONIO FELIPE MARTÍNEZ | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
 
 
