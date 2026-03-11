@@ -17,7 +17,7 @@ st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar
 # 🔄 Auto-Refresh Silencioso (30 segundos para soportar a tus usuarios VIP sin quemar Firebase)
 st_autorefresh(interval=30000, limit=None, key="quasar_autorefresh")
 
-# CSS Estilo Galáctico y Botones Premium + Estilos EN VIVO
+# CSS Estilo Galáctico y Botones Premium + Estilo En Vivo
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -46,6 +46,31 @@ db = firestore.client()
 
 def encriptar_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+# 🏦 MOTOR FINANCIERO CORREGIDO (No borra del portafolio, solo actualiza estatus y paga)
+def resolver_apuesta(pick_id, resultado_final):
+    # 1. Actualiza el pronóstico global a GANADA o PERDIDA
+    db.collection('pronosticos').document(pick_id).update({'estatus': resultado_final})
+    
+    # 2. Busca todos los tickets en el portafolio de todos los usuarios
+    inversiones = db.collection('portafolio').where('id_pick', '==', pick_id).stream()
+    for inv in inversiones:
+        datos = inv.to_dict()
+        user_email = datos['user']
+        monto = float(datos.get('monto', 0))
+        cuota = float(datos.get('cuota', 1))
+        
+        # 3. Si se ganó, paga la ganancia al Bankroll del usuario
+        if resultado_final == 'GANADA':
+            pago_total = monto * cuota
+            u_ref = db.collection('usuarios').document(user_email)
+            u_doc = u_ref.get()
+            if u_doc.exists:
+                b_actual = float(u_doc.to_dict().get('bankroll', 0))
+                u_ref.update({'bankroll': b_actual + pago_total})
+                
+        # 4. ACTUALIZA el ticket en el portafolio para que quede el registro visual (NO LO BORRA)
+        db.collection('portafolio').document(inv.id).update({'estatus': resultado_final})
 
 # Seguridad y Sesión
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
@@ -104,11 +129,13 @@ if not df.empty:
     df['liga'] = df['liga'].fillna('General')
     df['tipo'] = df['tipo'].fillna('Sencilla')
 
-docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).stream()
-df_port = pd.DataFrame([d.to_dict() for d in docs_port]) if docs_port else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto'])
+docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).order_by('fecha', direction=firestore.Query.DESCENDING).stream()
+df_port = pd.DataFrame([d.to_dict() for d in docs_port]) if docs_port else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+if not df_port.empty and 'estatus' not in df_port.columns:
+    df_port['estatus'] = 'PENDIENTE'
 
 user_ref = db.collection('usuarios').document(st.session_state['user_email'])
-bank_actual = user_ref.get().to_dict().get('bankroll', 1000.0) if user_ref.get().exists else 1000.0
+bank_actual = float(user_ref.get().to_dict().get('bankroll', 1000.0)) if user_ref.get().exists else 1000.0
 
 # --- BARRA SUPERIOR: LOGOUT SOLAMENTE ---
 col_head1, col_head2 = st.columns([8, 2])
@@ -119,7 +146,6 @@ if col_head2.button("🚪 CERRAR SESIÓN", use_container_width=True):
 # --- PANEL DE ADMIN ---
 if st.session_state['user_rol'] == 'admin':
     with st.expander("🛠️ EDITOR Y PANEL DE CONTROL (ADMIN)"):
-        # 🔴 AÑADIDA LA PESTAÑA DE EN VIVO AQUÍ
         tab_admin_sencilla, tab_admin_parlay, tab_admin_vivo = st.tabs(["📌 AGREGAR SENCILLA", "💎 ARMAR PARLAY VIP", "🔴 LANZAR EN VIVO"])
         
         with tab_admin_sencilla:
@@ -156,7 +182,6 @@ if st.session_state['user_rol'] == 'admin':
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': prob_real_parlay, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Parlay VIP publicado!"); st.rerun()
 
-        # 🔴 FORMULARIO EN VIVO
         with tab_admin_vivo:
             with st.form("nuevo_pick_vivo"):
                 st.info("Esta alerta saldrá resaltada en rojo intenso para que los usuarios entren de inmediato.")
@@ -186,7 +211,7 @@ if not df.empty:
             if row['estatus'] == 'GANADA': racha_actual += 1
             elif row['estatus'] == 'PERDIDA': break
 
-    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS (EXCLUYENDO EN VIVO PARA NO ARRUINAR LA MÉTRICA PRE-MATCH)
+    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS (EXCLUYENDO EN VIVO)
     m1, m2, m3, m4 = st.columns(4)
     df_sencillas_activas = df_activos[(df_activos['tipo'] != 'Parlay') & (df_activos['tipo'] != 'En Vivo')]
     max_ev = f"{df_sencillas_activas['ev'].max()}%" if not df_sencillas_activas.empty else "0%"
@@ -196,7 +221,7 @@ if not df.empty:
     m3.metric("🔥 RACHA ACTUAL", f"{racha_actual} AL HILO")
     m4.metric("🏦 BANKROLL", f"${bank_actual:,.2f}")
     
-    # 🗂️ PESTAÑAS PRINCIPALES (CON EN VIVO AL PRINCIPIO)
+    # 🗂️ PESTAÑAS PRINCIPALES
     tab_vivo, tab_futbol, tab_nba, tab_parlay, tab_port, tab_historial_tab, tab_tools = st.tabs(["🔴 EN VIVO", "⚽ FÚTBOL", "🏀 NBA", "💎 PARLAY VIP", "💼 PORTAFOLIO", "📈 HISTORIAL", "⚙️ PERFIL"])
     
     # --- 🔴 PESTAÑA EN VIVO ---
@@ -217,10 +242,23 @@ if not df.empty:
                     </div>
                 """, unsafe_allow_html=True)
                 
+                col_iv1, col_iv2 = st.columns([1, 2])
+                monto_vivo = col_iv1.number_input("Inversión ($):", value=float(bank_actual * 0.05), key=f"inv_v_{r['id']}")
+                if col_iv2.button("📥 Apostar en Vivo", key=f"btn_v_{r['id']}", use_container_width=True):
+                    if bank_actual >= monto_vivo:
+                        db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_vivo})
+                        db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
+                            'id_pick': r['id'], 'user': st.session_state['user_email'], 'partido': r['partido'], 
+                            'mercado': r['mercado'], 'cuota': r['cuota'], 'monto': monto_vivo, 'fecha': datetime.now(), 'estatus': 'PENDIENTE'
+                        })
+                        st.toast("¡Apuesta registrada y cobrada del Bankroll!")
+                        time.sleep(1); st.rerun()
+                    else: st.error("❌ Bankroll insuficiente.")
+
                 if st.session_state['user_rol'] == 'admin':
                     c_va, c_vb, c_vc = st.columns(3)
-                    if c_va.button(f"✅ Cobrar", key=f"wv_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'}); st.rerun()
-                    if c_vb.button(f"❌ Fallado", key=f"lv_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                    if c_va.button(f"✅ Cobrar", key=f"wv_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
+                    if c_vb.button(f"❌ Fallado", key=f"lv_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
                     if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
         else:
             st.info("📡 Escaneando ineficiencias en directo... No hay alertas activas en este momento.")
@@ -297,17 +335,24 @@ if not df.empty:
                             else:
                                 st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev:.1f}%) - NO APOSTAR</span></div>", unsafe_allow_html=True)
                             
-                            if st.button("📥 Guardar en Portafolio", key=f"btn_{r['id']}", use_container_width=True):
-                                db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
-                                    'user': st.session_state['user_email'], 'partido': r['partido'], 'mercado': r['mercado'], 'cuota': user_cuota, 'monto': monto_invertir, 'fecha': datetime.now()
-                                })
-                                st.toast("¡Inversión guardada en el portafolio!")
+                            if st.button("📥 Guardar y Descontar", key=f"btn_{r['id']}", use_container_width=True):
+                                if bank_actual >= monto_invertir:
+                                    db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_invertir})
+                                    db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
+                                        'id_pick': r['id'], 'user': st.session_state['user_email'], 'partido': r['partido'], 
+                                        'mercado': r['mercado'], 'cuota': user_cuota, 'monto': monto_invertir, 
+                                        'fecha': datetime.now(), 'estatus': 'PENDIENTE'
+                                    })
+                                    st.toast("¡Apuesta registrada y cobrada del Bankroll!")
+                                    time.sleep(1); st.rerun()
+                                else: st.error("❌ Bankroll insuficiente.")
                         st.markdown("</div>", unsafe_allow_html=True)
+                        # -----------------------------------------------------------
 
                         if st.session_state['user_rol'] == 'admin':
                             c_wa, c_wb, c_wc, c_wd = st.columns(4)
-                            if c_wa.button(f"✅ Ganada", key=f"w_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'}); st.rerun()
-                            if c_wb.button(f"❌ Perdida", key=f"l_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                            if c_wa.button(f"✅ Ganada", key=f"w_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
+                            if c_wb.button(f"❌ Perdida", key=f"l_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
                             if c_wc.button(f"✏️ Editar", key=f"edt_{r['id']}"): st.session_state[edit_key] = True; st.rerun()
                             if c_wd.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
                         st.markdown("<hr style='opacity: 0.2;'>", unsafe_allow_html=True)
@@ -396,31 +441,61 @@ if not df.empty:
                         else:
                             st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev_p:.1f}%) - DESCARTAR</span></div>", unsafe_allow_html=True)
                         
-                        if st.button("📥 Guardar Ticket en Mi Portafolio", key=f"btn_p_{p['id']}", use_container_width=True):
-                            db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
-                                'user': st.session_state['user_email'], 'partido': p['partido'], 'mercado': 'Combinada VIP', 'cuota': user_cuota_p, 'monto': monto_invertir_p, 'fecha': datetime.now()
-                            })
-                            st.toast("¡Ticket Dorado guardado en el portafolio!")
+                        if st.button("📥 Apostar Ticket Dorado", key=f"btn_p_{p['id']}", use_container_width=True):
+                            if bank_actual >= monto_invertir_p:
+                                db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_invertir_p})
+                                db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
+                                    'id_pick': p['id'], 'user': st.session_state['user_email'], 'partido': p['partido'], 
+                                    'mercado': 'Combinada VIP', 'cuota': user_cuota_p, 'monto': monto_invertir_p, 
+                                    'fecha': datetime.now(), 'estatus': 'PENDIENTE'
+                                })
+                                st.toast("¡Ticket Dorado registrado y cobrado del Bankroll!")
+                                time.sleep(1); st.rerun()
+                            else: st.error("❌ Bankroll insuficiente.")
                     st.markdown("</div>", unsafe_allow_html=True)
+                    # -----------------------------------------------------------
 
                     if st.session_state['user_rol'] == 'admin':
                         c_pa, c_pb, c_pc, c_pd = st.columns(4)
-                        if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
-                        if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                        if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): resolver_apuesta(p['id'], 'GANADA'); st.rerun()
+                        if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): resolver_apuesta(p['id'], 'PERDIDA'); st.rerun()
                         if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
                         if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
                     st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
 
-    # --- 💼 PESTAÑA PORTAFOLIO ---
+    # --- 💼 PESTAÑA PORTAFOLIO MODIFICADA ---
     with tab_port:
-        st.markdown("### 💼 MIS INVERSIONES ACTIVAS")
+        st.markdown("### 💼 MIS INVERSIONES")
         if not df_port.empty:
-            inversion_total = df_port['monto'].sum()
-            st.markdown(f"<p style='font-size: 1.2rem; color: #00f2ff;'>Total en Riesgo: <b>${inversion_total:,.2f}</b></p>", unsafe_allow_html=True)
+            df_port['estatus'] = df_port.get('estatus', 'PENDIENTE').fillna('PENDIENTE')
+            df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
+            
+            inversion_total = df_port_pendientes['monto'].sum()
+            st.markdown(f"<p style='font-size: 1.2rem; color: #00f2ff;'>Total en Riesgo Activo: <b>${inversion_total:,.2f}</b></p>", unsafe_allow_html=True)
+            
             for i, r in df_port.iterrows():
-                st.markdown(f"<div style='border-left: 3px solid #bc13fe; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 5px; margin-bottom: 10px;'><b style='color:white;'>{r['partido']}</b><br><span style='color:#b3cce6;'>{r['mercado']} | Cuota: {r['cuota']} | Inversión: <b>${r['monto']:,.2f}</b></span></div>", unsafe_allow_html=True)
-        else: st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar en Mi Portafolio' en el radar.")
+                estatus = r.get('estatus', 'PENDIENTE')
+                if estatus == 'GANADA':
+                    borde = "#00ff00"
+                    badge = "<span style='color:#00ff00; font-weight:bold; background:rgba(0,255,0,0.1); padding:2px 8px; border-radius:4px;'>✅ GANADA</span>"
+                elif estatus == 'PERDIDA':
+                    borde = "#ff0000"
+                    badge = "<span style='color:#ff0000; font-weight:bold; background:rgba(255,0,0,0.1); padding:2px 8px; border-radius:4px;'>❌ PERDIDA</span>"
+                else:
+                    borde = "#bc13fe"
+                    badge = "<span style='color:#ffcc00; font-weight:bold; background:rgba(255,204,0,0.1); padding:2px 8px; border-radius:4px;'>⏳ PENDIENTE</span>"
+                    
+                st.markdown(f"""
+                    <div style='border-left: 4px solid {borde}; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 5px; margin-bottom: 10px;'>
+                        <div style='display:flex; justify-content:space-between; align-items:center;'>
+                            <b style='color:white; font-size:1.1rem;'>{r['partido']}</b>
+                            {badge}
+                        </div>
+                        <span style='color:#b3cce6;'>{r['mercado']} | Momio: {r['cuota']} | Inversión: <b style='color:white;'>${r['monto']:,.2f}</b></span>
+                    </div>
+                """, unsafe_allow_html=True)
+        else: st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar y Descontar' en el radar.")
 
     # --- 📈 PESTAÑA HISTORIAL Y YIELD ---
     with tab_historial_tab:
@@ -464,7 +539,9 @@ if not df.empty:
                 with st.expander(f"{icon} | {r['partido']} | {r['mercado']}"):
                     st.markdown(f"<p style='color:{color};'>Cuota: {r['cuota']} | Ventaja: {r['ev']}%</p>", unsafe_allow_html=True)
                     if st.session_state['user_rol'] == 'admin':
-                        if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'}); st.rerun()
+                        if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}"): 
+                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
+                            st.rerun()
         else: st.info("El historial aparecerá aquí conforme se resuelvan los partidos.")
 
     # --- ⚙️ PESTAÑA PERFIL Y HERRAMIENTAS VIP ---
@@ -472,7 +549,7 @@ if not df.empty:
         st.markdown("### ⚙️ CONFIGURACIÓN DE CUENTA")
         st.markdown(f"<p style='color: #b3cce6;'>Usuario activo: {st.session_state['user_email']}</p>", unsafe_allow_html=True)
         col_u1, col_u2 = st.columns([2, 1])
-        nuevo_bank = col_u1.number_input("Capital Inicial (Bankroll Fijo):", value=float(bank_actual), step=50.0)
+        nuevo_bank = col_u1.number_input("Capital Actual (Bankroll Fijo):", value=float(bank_actual), step=50.0)
         if col_u2.button("💾 GUARDAR CAMBIOS", use_container_width=True):
             user_ref.update({'bankroll': nuevo_bank})
             st.success("¡Datos sincronizados con éxito!"); time.sleep(1); st.rerun()
@@ -570,4 +647,3 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
-
