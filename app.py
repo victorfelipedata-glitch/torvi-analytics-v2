@@ -1,15 +1,21 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import time
 import json
 import hashlib
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
+from streamlit_autorefresh import st_autorefresh
+import numpy as np
 
 # Configuro mi página
 st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
+
+# 🔄 Auto-Refresh Silencioso (60 segundos)
+st_autorefresh(interval=60000, limit=None, key="quasar_autorefresh")
 
 # CSS Estilo Galáctico y Botones Premium
 st.markdown("""
@@ -44,13 +50,13 @@ if 'autenticado' not in st.session_state: st.session_state['autenticado'] = Fals
 if 'user_rol' not in st.session_state: st.session_state['user_rol'] = 'invitado'
 if 'user_email' not in st.session_state: st.session_state['user_email'] = 'default'
 
-# --- ENCABEZADO CON LOGO QUASAR ---
+# --- ENCABEZADO CON EL NUEVO LOGO QUASAR ---
 st.markdown("""
     <div style='text-align: center; margin-bottom: 10px; margin-top: 20px;'>
         <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/57c54d118a85d753a818cc39f0e5ce9ab5a02a6a/nuevo_logo_quasar.png" width="350" style="border-radius: 15px; box-shadow: 0px 0px 30px rgba(188, 19, 254, 0.6);">
     </div>
     """, unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
 
 if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -102,17 +108,13 @@ df_port = pd.DataFrame([d.to_dict() for d in docs_port]) if docs_port else pd.Da
 user_ref = db.collection('usuarios').document(st.session_state['user_email'])
 bank_actual = user_ref.get().to_dict().get('bankroll', 1000.0) if user_ref.get().exists else 1000.0
 
-# --- BARRA SUPERIOR: ACTUALIZAR Y LOGOUT ---
-col_head1, col_head2, col_head3 = st.columns([6, 2, 2])
-if col_head2.button("🔄 ACTUALIZAR RADAR", type="primary", use_container_width=True):
-    st.toast("Actualizando datos del servidor...")
-    time.sleep(0.5)
-    st.rerun()
-if col_head3.button("🚪 CERRAR SESIÓN", use_container_width=True):
+# --- BARRA SUPERIOR: LOGOUT SOLAMENTE ---
+col_head1, col_head2 = st.columns([8, 2])
+if col_head2.button("🚪 CERRAR SESIÓN", use_container_width=True):
     st.session_state['autenticado'] = False
     st.rerun()
 
-# --- PANEL DE ADMIN INTACTO ---
+# --- PANEL DE ADMIN ---
 if st.session_state['user_rol'] == 'admin':
     with st.expander("🛠️ EDITOR Y PANEL DE CONTROL (ADMIN)"):
         tab_admin_sencilla, tab_admin_parlay = st.tabs(["📌 AGREGAR SENCILLA", "💎 ARMAR PARLAY VIP"])
@@ -164,7 +166,7 @@ if not df.empty:
             if row['estatus'] == 'GANADA': racha_actual += 1
             elif row['estatus'] == 'PERDIDA': break
 
-    # 🚨 FIX: MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS 🚨
+    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS
     m1, m2, m3, m4 = st.columns(4)
     df_sencillas_activas = df_activos[df_activos['tipo'] != 'Parlay']
     max_ev = f"{df_sencillas_activas['ev'].max()}%" if not df_sencillas_activas.empty else "0%"
@@ -186,7 +188,6 @@ if not df.empty:
             liga_seleccionada = st.selectbox("🏆 Filtrar por Liga / Torneo:", ["Todas las Ligas"] + ligas_disponibles)
             if liga_seleccionada != "Todas las Ligas": df_futbol = df_futbol[df_futbol['liga'] == liga_seleccionada]
 
-            # 🌟 GRÁFICA PLANA DE BURBUJAS 
             if not df_futbol.empty:
                 st.markdown("<h4 style='text-align:center; color:#00f2ff; font-family:Orbitron; margin-top:20px;'>🛰️ MAPA DE VALOR (PROBABILIDADES VS EV+)</h4>", unsafe_allow_html=True)
                 fig_burbujas = px.scatter(
@@ -255,11 +256,11 @@ if not df.empty:
     with tab_nba:
         st.info("Aún no inicia la cobertura de la duela.")
 
-    # --- 💎 PESTAÑA PARLAY VIP CON EDICIÓN ---
+    # --- 💎 PESTAÑA PARLAY VIP ---
     with tab_parlay:
         df_parlays = df_activos[df_activos['tipo'] == 'Parlay']
         
-        # 🔔 ALERTA SONORA
+        # Alerta Sonora
         if not df_parlays.empty:
             ultimo_parlay_id = df_parlays.iloc[0]['id']
             if 'last_parlay_alert' not in st.session_state:
@@ -277,7 +278,6 @@ if not df.empty:
         
         if not df_parlays.empty:
             for i, p in df_parlays.iterrows():
-                # 🚨 FIX: MODO EDICIÓN PARA PARLAYS 🚨
                 edit_key_p = f"edit_parlay_{p['id']}"
                 if edit_key_p not in st.session_state: st.session_state[edit_key_p] = False
                 
@@ -310,7 +310,6 @@ if not df.empty:
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # 🚨 BOTONES COMPLETOS PARA EL ADMIN 🚨
                     if st.session_state['user_rol'] == 'admin':
                         c_pa, c_pb, c_pc, c_pd = st.columns(4)
                         if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
@@ -386,8 +385,8 @@ if not df.empty:
             st.success("¡Datos sincronizados con éxito!"); time.sleep(1); st.rerun()
             
         st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("### 🧮 CALCULADORAS MATEMÁTICAS VIP")
-        calc_kelly, calc_hedge = st.tabs(["📊 Criterio de Kelly", "🛡️ Cobertura (Hedge)"])
+        st.markdown("### 🧮 CALCULADORAS MATEMÁTICAS Y PROYECCIÓN VIP")
+        calc_kelly, calc_hedge, calc_montecarlo = st.tabs(["📊 Criterio de Kelly", "🛡️ Cobertura (Hedge)", "🎲 Simulador Monte Carlo"])
         
         with calc_kelly:
             st.info("Calcula el % exacto de tu bankroll a invertir basándote en la ventaja matemática.")
@@ -414,6 +413,65 @@ if not df.empty:
                 beneficio_seguro = ganancia_potencial - h_inversion - monto_hedge
                 st.success(f"Estrategia: Apuesta exactamente **${monto_hedge:,.2f}** a la contra.")
                 st.info(f"Pase lo que pase en el último partido, tu beneficio neto asegurado será de: **${beneficio_seguro:,.2f}**")
+                
+        with calc_montecarlo:
+            st.info("Simula 1,000 realidades alternativas de tus próximas apuestas usando tu Win Rate actual para calcular el crecimiento esperado y tu peor racha posible (Drawdown).")
+            
+            # Variables predeterminadas basadas en historial o valores base
+            wr_actual = float(wr) if 'wr' in locals() and wr > 0 else 65.0
+            
+            c_mc1, c_mc2, c_mc3 = st.columns(3)
+            mc_apuestas = c_mc1.number_input("Futuras Apuestas a Simular:", min_value=10, max_value=500, value=50, step=10)
+            mc_wr = c_mc2.number_input("Win Rate Estimado (%):", min_value=1.0, max_value=99.0, value=wr_actual, step=1.0)
+            mc_cuota = c_mc3.number_input("Cuota Promedio (Ej. 1.85):", min_value=1.01, value=1.85, step=0.05)
+            mc_riesgo = st.slider("Riesgo por Apuesta (% del Bankroll):", min_value=1.0, max_value=20.0, value=5.0, step=0.5)
+
+            if st.button("🚀 INICIAR SIMULACIÓN CUÁNTICA", use_container_width=True):
+                with st.spinner("Procesando 1,000 universos paralelos..."):
+                    simulaciones = 1000
+                    win_rate_prob = mc_wr / 100.0
+                    
+                    # Matriz de resultados
+                    bankrolls = np.zeros((simulaciones, mc_apuestas + 1))
+                    bankrolls[:, 0] = bank_actual
+                    
+                    for i in range(simulaciones):
+                        for j in range(1, mc_apuestas + 1):
+                            gano = np.random.rand() < win_rate_prob
+                            apuesta = bankrolls[i, j-1] * (mc_riesgo / 100.0)
+                            if gano:
+                                bankrolls[i, j] = bankrolls[i, j-1] + (apuesta * (mc_cuota - 1))
+                            else:
+                                bankrolls[i, j] = bankrolls[i, j-1] - apuesta
+
+                    # Extraer métricas clave
+                    bankroll_final_promedio = np.mean(bankrolls[:, -1])
+                    peor_escenario = np.min(bankrolls[:, -1])
+                    mejor_escenario = np.max(bankrolls[:, -1])
+                    
+                    # Gráfica de estilo Quasar
+                    fig_mc = go.Figure()
+                    
+                    # Dibujar 100 líneas aleatorias (opacidad baja)
+                    indices_muestra = np.random.choice(simulaciones, 100, replace=False)
+                    for idx in indices_muestra:
+                        fig_mc.add_trace(go.Scatter(y=bankrolls[idx], mode='lines', line=dict(color='rgba(0, 242, 255, 0.05)', width=1), showlegend=False))
+                    
+                    # Dibujar línea promedio (Morado neón)
+                    promedio_historico = np.mean(bankrolls, axis=0)
+                    fig_mc.add_trace(go.Scatter(y=promedio_historico, mode='lines', line=dict(color='#bc13fe', width=4), name='Crecimiento Esperado'))
+                    
+                    fig_mc.update_layout(title="Proyección de Bankroll a Futuro", template="plotly_dark", plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                    st.plotly_chart(fig_mc, use_container_width=True)
+                    
+                    st.markdown(f"""
+                    <div style='background: rgba(10, 17, 40, 0.8); padding: 15px; border-radius: 10px; border: 1px solid #00f2ff; text-align: center;'>
+                        <h4 style='color: white;'>🔮 RESUMEN MULTIVERSAL</h4>
+                        <p style='color: #00f2ff; font-size: 1.1rem;'>Bankroll Promedio Esperado: <b>${bankroll_final_promedio:,.2f}</b></p>
+                        <p style='color: #ff0000; font-size: 0.9rem;'>Peor Escenario Posible: ${peor_escenario:,.2f}</p>
+                        <p style='color: #00ff00; font-size: 0.9rem;'>Mejor Escenario Posible: ${mejor_escenario:,.2f}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 else:
     st.info("Base de datos vacía. Esperando primer análisis del núcleo...")
@@ -422,9 +480,6 @@ else:
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("""
     <p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.85rem; opacity: 0.8;'>
-        © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
+        © 2026 DESARROLLADO POR VÍCTOR ANTONIO FELIPE MARTÍNEZ | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
-
-
-
