@@ -15,7 +15,7 @@ import numpy as np
 st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
 
 # 🔄 Auto-Refresh Silencioso (60 segundos)
-st_autorefresh(interval=5000, limit=None, key="quasar_autorefresh")
+st_autorefresh(interval=60000, limit=None, key="quasar_autorefresh")
 
 # CSS Estilo Galáctico y Botones Premium
 st.markdown("""
@@ -483,4 +483,5 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
 
