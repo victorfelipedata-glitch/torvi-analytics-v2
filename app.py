@@ -50,7 +50,7 @@ st.markdown("""
         <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/38bce5a4aa1f6ebf5cf113ebf193f03547f1dd2c/logo.jpg" width="350" style="border-radius: 15px; box-shadow: 0px 0px 30px rgba(188, 19, 254, 0.6);">
     </div>
     """, unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
 
 if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -139,7 +139,7 @@ if st.session_state['user_rol'] == 'admin':
         with tab_admin_parlay:
             with st.form("nuevo_parlay"):
                 st.info("Esta sección creará un ticket dorado exclusivo en la pestaña de Parlay VIP.")
-                titulo_parlay = st.text_input("👑 Título del Parlay:", placeholder="Ej: Combinada Champions League")
+                titulo_parlay = st.text_input("👑 Título del Parlay:", placeholder="Ej: Combinada VIP Europea")
                 partidos_parlay = st.text_area("⚽ Partidos incluidos (uno por línea):")
                 c_p1, c_p2 = st.columns(2)
                 cuota_parlay = c_p1.number_input("📈 Cuota Total:", min_value=1.01, value=3.50, step=0.01)
@@ -164,10 +164,12 @@ if not df.empty:
             if row['estatus'] == 'GANADA': racha_actual += 1
             elif row['estatus'] == 'PERDIDA': break
 
-    # MÚLTIPLES MÉTRICAS PRO
+    # 🚨 FIX: MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS 🚨
     m1, m2, m3, m4 = st.columns(4)
-    max_ev = f"{df_activos['ev'].max()}%" if not df_activos.empty else "0%"
-    m1.metric("🔥 MÁX VENTAJA", max_ev)
+    df_sencillas_activas = df_activos[df_activos['tipo'] != 'Parlay']
+    max_ev = f"{df_sencillas_activas['ev'].max()}%" if not df_sencillas_activas.empty else "0%"
+    
+    m1.metric("🔥 MÁX VENTAJA (SENCILLAS)", max_ev)
     m2.metric("🎯 ACTIVOS", len(df_activos))
     m3.metric("🔥 RACHA ACTUAL", f"{racha_actual} AL HILO")
     m4.metric("🏦 BANKROLL", f"${bank_actual:,.2f}")
@@ -177,7 +179,7 @@ if not df.empty:
     
     # --- ⚽ PESTAÑA FÚTBOL ---
     with tab_futbol:
-        df_futbol = df_activos[(df_activos['deporte'] == 'Fútbol') & (df_activos['tipo'] != 'Parlay')]
+        df_futbol = df_sencillas_activas[(df_sencillas_activas['deporte'] == 'Fútbol')]
         
         if not df_futbol.empty:
             ligas_disponibles = df_futbol['liga'].dropna().unique().tolist()
@@ -226,7 +228,7 @@ if not df.empty:
                                     <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>PROB. CASA: <b>{r.get('prob_casa',0)}%</b></div>
                                     <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>PROB. REAL: <b>{r.get('prob_real',0)}%</b></div>
                                 </div>
-                                <p style='font-size: 0.95rem; color: #b3cce6;'>{r.get('analisis', '')}</p>
+                                <p style='font-size: 0.95rem; color: #b3cce6; white-space: pre-line;'>{r.get('analisis', '')}</p>
                             </div>
                         """, unsafe_allow_html=True)
                         
@@ -253,18 +255,17 @@ if not df.empty:
     with tab_nba:
         st.info("Aún no inicia la cobertura de la duela.")
 
-    # --- 💎 PESTAÑA PARLAY VIP ---
+    # --- 💎 PESTAÑA PARLAY VIP CON EDICIÓN ---
     with tab_parlay:
         df_parlays = df_activos[df_activos['tipo'] == 'Parlay']
         
-        # 🔔 ALERTA SONORA DE NUEVO PARLAY VIP
+        # 🔔 ALERTA SONORA
         if not df_parlays.empty:
             ultimo_parlay_id = df_parlays.iloc[0]['id']
             if 'last_parlay_alert' not in st.session_state:
                 st.session_state['last_parlay_alert'] = ultimo_parlay_id
             elif st.session_state['last_parlay_alert'] != ultimo_parlay_id:
                 st.session_state['last_parlay_alert'] = ultimo_parlay_id
-                # Audio elegante de "Ding"
                 st.markdown("""<audio autoplay><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
                 st.toast("🚨 ¡NUEVO PARLAY VIP DISPONIBLE!", icon="💎")
 
@@ -276,20 +277,47 @@ if not df.empty:
         
         if not df_parlays.empty:
             for i, p in df_parlays.iterrows():
-                st.markdown(f"""
-                    <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
-                        <h3 style='color: white;'>{p['partido']}</h3>
-                        <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
-                        <p style='color: #00f2ff; font-weight: bold;'>CUOTA FINAL: {p['cuota']} | EV+: {p['ev']}%</p>
-                        <p style='font-size: 0.95rem; color: white;'>{p.get('analisis','')}</p>
-                    </div>
-                """, unsafe_allow_html=True)
-                if st.session_state['user_rol'] == 'admin':
-                    c_pa, c_pb, c_pc = st.columns(3)
-                    if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
-                    if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
-                    if c_pc.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
-                st.markdown("<br>", unsafe_allow_html=True)
+                # 🚨 FIX: MODO EDICIÓN PARA PARLAYS 🚨
+                edit_key_p = f"edit_parlay_{p['id']}"
+                if edit_key_p not in st.session_state: st.session_state[edit_key_p] = False
+                
+                if st.session_state[edit_key_p]:
+                    st.markdown(f"<div style='background: rgba(255, 204, 0, 0.1); padding: 15px; border-radius: 10px; border: 1px solid #ffcc00;'>", unsafe_allow_html=True)
+                    with st.form(f"form_edit_p_{p['id']}"):
+                        st.write(f"✏️ Editando Parlay: {p['partido']}")
+                        n_titulo = st.text_input("Nuevo Título:", value=str(p['partido']))
+                        n_mercado = st.text_area("Nuevos Partidos:", value=str(p['mercado']))
+                        col_ep1, col_ep2 = st.columns(2)
+                        n_cuota_p = col_ep1.number_input("Nueva Cuota:", value=float(p['cuota']), step=0.01)
+                        n_ev_p = col_ep2.number_input("Nuevo EV+:", value=float(p['ev']), step=0.1)
+                        n_ana_p = st.text_area("Nuevo Análisis:", value=str(p.get('analisis','')))
+                        
+                        col_sp1, col_sp2 = st.columns(2)
+                        if col_sp1.form_submit_button("💾 Guardar"):
+                            db.collection('pronosticos').document(p['id']).update({
+                                'partido': n_titulo, 'mercado': n_mercado, 'cuota': n_cuota_p, 'ev': n_ev_p, 'analisis': n_ana_p
+                            })
+                            st.session_state[edit_key_p] = False; st.rerun()
+                        if col_sp2.form_submit_button("❌ Cancelar"): st.session_state[edit_key_p] = False; st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
+                            <h3 style='color: white;'>{p['partido']}</h3>
+                            <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
+                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA FINAL: {p['cuota']} | EV+: {p['ev']}%</p>
+                            <p style='font-size: 0.95rem; color: white; white-space: pre-line;'>{p.get('analisis','')}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # 🚨 BOTONES COMPLETOS PARA EL ADMIN 🚨
+                    if st.session_state['user_rol'] == 'admin':
+                        c_pa, c_pb, c_pc, c_pd = st.columns(4)
+                        if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
+                        if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                        if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
+                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
+                    st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
 
     # --- 💼 PESTAÑA PORTAFOLIO ---
@@ -309,7 +337,6 @@ if not df.empty:
             perdidas = len(df_historial[df_historial['estatus'] == 'PERDIDA'])
             wr = (ganadas/(ganadas+perdidas))*100 if (ganadas+perdidas)>0 else 0
             
-            # CÁLCULO DE YIELD (Rendimiento basado en unidades estándar)
             ganancia_unidades = 0
             for _, r in df_historial.iterrows():
                 if r['estatus'] == 'GANADA': ganancia_unidades += (float(r['cuota']) - 1)
@@ -395,6 +422,6 @@ else:
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("""
     <p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.85rem; opacity: 0.8;'>
-        © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
+        © 2026 DESARROLLADO POR VÍCTOR ANTONIO FELIPE MARTÍNEZ | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
