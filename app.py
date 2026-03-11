@@ -422,8 +422,9 @@ else:
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("""
     <p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.85rem; opacity: 0.8;'>
-        © 2026 DESARROLLADO POR TORVI ANTONIO|QUASAR ANALYTICS
+        © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
 
 
