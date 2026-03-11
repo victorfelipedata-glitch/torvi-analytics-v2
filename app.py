@@ -257,24 +257,43 @@ if not df.empty:
         st.info("Aún no inicia la cobertura de la duela.")
 
     # --- 💎 PESTAÑA PARLAY VIP ---
-    with tab_parlay:
-        df_parlays = df_activos[df_activos['tipo'] == 'Parlay']
-        
-        # Alerta Sonora
-        if not df_parlays.empty:
-            ultimo_parlay_id = df_parlays.iloc[0]['id']
-            if 'last_parlay_alert' not in st.session_state:
-                st.session_state['last_parlay_alert'] = ultimo_parlay_id
-            elif st.session_state['last_parlay_alert'] != ultimo_parlay_id:
-                st.session_state['last_parlay_alert'] = ultimo_parlay_id
-                st.markdown("""<audio autoplay><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
-                st.toast("🚨 ¡NUEVO PARLAY VIP DISPONIBLE!", icon="💎")
+else:
+                    st.markdown(f"""
+                        <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
+                            <h3 style='color: white;'>{p['partido']}</h3>
+                            <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
+                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA FINAL: {p['cuota']} | EV+: {p['ev']}%</p>
+                            <p style='font-size: 0.95rem; color: white; white-space: pre-line;'>{p.get('analisis','')}</p>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # --- NUEVO BLOQUE: GESTIÓN DE RIESGO Y PORTAFOLIO PARA PARLAY ---
+                    st.markdown("<div style='background: rgba(255, 204, 0, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #ffcc00; margin-top: 15px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                    sugerencia_parlay = bank_actual * 0.02 # 2% por ser Parlay (Alta varianza)
+                    st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Gestión de Riesgo VIP:</b> Sugerencia del 2.0% de tu Bankroll</p>", unsafe_allow_html=True)
+                    col_ip1, col_ip2 = st.columns([1, 2])
+                    monto_invertir_p = col_ip1.number_input("Tu Inversión ($):", value=float(sugerencia_parlay), key=f"inv_p_{p['id']}")
+                    if col_ip2.button("📥 Guardar Ticket en Mi Portafolio", key=f"btn_p_{p['id']}"):
+                        db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
+                            'user': st.session_state['user_email'], 
+                            'partido': p['partido'], 
+                            'mercado': 'Combinada VIP', 
+                            'cuota': p['cuota'], 
+                            'monto': monto_invertir_p, 
+                            'fecha': datetime.now()
+                        })
+                        st.toast("¡Ticket Dorado guardado en el portafolio!")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    # ----------------------------------------------------------------
 
-        st.markdown("""
-            <div style='background: linear-gradient(135deg, #1a0b2e 0%, #bc13fe 100%); padding: 25px; border-radius: 20px; border: 2px solid #ffcc00; box-shadow: 0px 0px 20px rgba(188, 19, 254, 0.5);'>
-                <h2 style='text-align: center; color: #ffcc00; font-family: Orbitron; margin:0;'>👑 PARLAY EXCLUSIVO VIP</h2>
-            </div><br>
-        """, unsafe_allow_html=True)
+                    # Botones de Admin
+                    if st.session_state['user_rol'] == 'admin':
+                        c_pa, c_pb, c_pc, c_pd = st.columns(4)
+                        if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
+                        if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                        if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
+                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
+                    st.markdown("<br>", unsafe_allow_html=True)
         
         if not df_parlays.empty:
             for i, p in df_parlays.iterrows():
@@ -483,5 +502,6 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
 
 
