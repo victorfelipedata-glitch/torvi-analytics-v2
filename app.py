@@ -15,7 +15,7 @@ import numpy as np
 st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
 
 # 🔄 Auto-Refresh Silencioso (60 segundos)
-st_autorefresh(interval=60000, limit=None, key="quasar_autorefresh")
+st_autorefresh(interval=5000, limit=None, key="quasar_autorefresh")
 
 # CSS Estilo Galáctico y Botones Premium
 st.markdown("""
@@ -56,7 +56,7 @@ st.markdown("""
         <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/57c54d118a85d753a818cc39f0e5ce9ab5a02a6a/nuevo_logo_quasar.png" width="350" style="border-radius: 15px; box-shadow: 0px 0px 30px rgba(188, 19, 254, 0.6);">
     </div>
     """, unsafe_allow_html=True)
-st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA Y EV+</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
 
 if not st.session_state['autenticado']:
     c1, c2, c3 = st.columns([1, 2, 1])
@@ -480,6 +480,7 @@ else:
 st.markdown("<br><br><hr>", unsafe_allow_html=True)
 st.markdown("""
     <p style='text-align: center; color: #00f2ff; font-family: Orbitron, sans-serif; font-size: 0.85rem; opacity: 0.8;'>
-        © 2026 DESARROLLADO POR VÍCTOR ANTONIO FELIPE MARTÍNEZ | QUASAR ANALYTICS
+        © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
