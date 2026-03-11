@@ -17,7 +17,7 @@ st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar
 # 🔄 Auto-Refresh Silencioso (30 segundos para soportar a tus usuarios VIP sin quemar Firebase)
 st_autorefresh(interval=30000, limit=None, key="quasar_autorefresh")
 
-# CSS Estilo Galáctico y Botones Premium
+# CSS Estilo Galáctico y Botones Premium + Estilos EN VIVO
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
@@ -32,6 +32,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { background-color: rgba(188, 19, 254, 0.1); border-radius: 10px 10px 0 0; color: white; padding: 10px 20px; transition: all 0.3s ease;}
     .stTabs [aria-selected="true"] { background-color: rgba(0, 242, 255, 0.2) !important; border-bottom: 2px solid #00f2ff !important; text-shadow: 0 0 10px #00f2ff;}
     button[kind="primary"] { background: linear-gradient(45deg, #ff3366, #ff9933) !important; color: white !important; font-weight: bold !important; border: none !important; border-radius: 8px !important; box-shadow: 0 0 15px rgba(255,51,102,0.4) !important; }
+    .live-card { background: rgba(40, 10, 10, 0.7); padding: 20px; border-radius: 15px; border: 1px solid #ff0044; margin-bottom: 10px; box-shadow: 0 0 15px rgba(255, 0, 68, 0.3); animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { box-shadow: 0 0 10px rgba(255,0,68,0.2); } 50% { box-shadow: 0 0 20px rgba(255,0,68,0.6); } 100% { box-shadow: 0 0 10px rgba(255,0,68,0.2); } }
     </style>
     """, unsafe_allow_html=True)
 
@@ -117,7 +119,8 @@ if col_head2.button("🚪 CERRAR SESIÓN", use_container_width=True):
 # --- PANEL DE ADMIN ---
 if st.session_state['user_rol'] == 'admin':
     with st.expander("🛠️ EDITOR Y PANEL DE CONTROL (ADMIN)"):
-        tab_admin_sencilla, tab_admin_parlay = st.tabs(["📌 AGREGAR SENCILLA", "💎 ARMAR PARLAY VIP"])
+        # 🔴 AÑADIDA LA PESTAÑA DE EN VIVO AQUÍ
+        tab_admin_sencilla, tab_admin_parlay, tab_admin_vivo = st.tabs(["📌 AGREGAR SENCILLA", "💎 ARMAR PARLAY VIP", "🔴 LANZAR EN VIVO"])
         
         with tab_admin_sencilla:
             with st.form("nuevo_pick_sencillo"):
@@ -153,6 +156,22 @@ if st.session_state['user_rol'] == 'admin':
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': prob_real_parlay, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Parlay VIP publicado!"); st.rerun()
 
+        # 🔴 FORMULARIO EN VIVO
+        with tab_admin_vivo:
+            with st.form("nuevo_pick_vivo"):
+                st.info("Esta alerta saldrá resaltada en rojo intenso para que los usuarios entren de inmediato.")
+                c_v1, c_v2 = st.columns(2)
+                partido_vivo = c_v1.text_input("🔴 Encuentro (Minuto/Marcador):", placeholder="Ej: Arsenal 0-0 (Min 45)")
+                mercado_vivo = c_v2.text_input("🎯 Mercado a Atacar:", placeholder="Ej: Gana Cualquiera (12)")
+                c_vn1, c_vn2 = st.columns(2)
+                cuota_vivo = c_vn1.number_input("📈 Cuota Actual:", min_value=1.01, value=1.50, step=0.01)
+                ev_vivo = c_vn2.number_input("🔥 EV+ Instantáneo %:", value=20.0)
+                ana_vivo = st.text_area("🧠 Razón rápida del pick en vivo:")
+                if st.form_submit_button("🔴 LANZAR ALERTA EN VIVO"):
+                    p_id = f"{int(time.time())}"
+                    db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': partido_vivo, 'mercado': mercado_vivo, 'deporte': 'Fútbol', 'liga': 'LIVE', 'tipo': 'En Vivo', 'cuota': cuota_vivo, 'prob_casa': 0, 'prob_real': 0, 'ev': ev_vivo, 'analisis': ana_vivo, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
+                    st.success("¡Alerta en vivo enviada!"); st.rerun()
+
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
 if not df.empty:
@@ -167,9 +186,9 @@ if not df.empty:
             if row['estatus'] == 'GANADA': racha_actual += 1
             elif row['estatus'] == 'PERDIDA': break
 
-    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS
+    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS (EXCLUYENDO EN VIVO PARA NO ARRUINAR LA MÉTRICA PRE-MATCH)
     m1, m2, m3, m4 = st.columns(4)
-    df_sencillas_activas = df_activos[df_activos['tipo'] != 'Parlay']
+    df_sencillas_activas = df_activos[(df_activos['tipo'] != 'Parlay') & (df_activos['tipo'] != 'En Vivo')]
     max_ev = f"{df_sencillas_activas['ev'].max()}%" if not df_sencillas_activas.empty else "0%"
     
     m1.metric("🔥 MÁX VENTAJA (SENCILLAS)", max_ev)
@@ -177,9 +196,35 @@ if not df.empty:
     m3.metric("🔥 RACHA ACTUAL", f"{racha_actual} AL HILO")
     m4.metric("🏦 BANKROLL", f"${bank_actual:,.2f}")
     
-    # 🗂️ PESTAÑAS PRINCIPALES
-    tab_futbol, tab_nba, tab_parlay, tab_port, tab_historial_tab, tab_tools = st.tabs(["⚽ FÚTBOL", "🏀 NBA", "💎 PARLAY VIP", "💼 PORTAFOLIO", "📈 HISTORIAL", "⚙️ PERFIL"])
+    # 🗂️ PESTAÑAS PRINCIPALES (CON EN VIVO AL PRINCIPIO)
+    tab_vivo, tab_futbol, tab_nba, tab_parlay, tab_port, tab_historial_tab, tab_tools = st.tabs(["🔴 EN VIVO", "⚽ FÚTBOL", "🏀 NBA", "💎 PARLAY VIP", "💼 PORTAFOLIO", "📈 HISTORIAL", "⚙️ PERFIL"])
     
+    # --- 🔴 PESTAÑA EN VIVO ---
+    with tab_vivo:
+        df_vivo = df_activos[df_activos['tipo'] == 'En Vivo']
+        if not df_vivo.empty:
+            st.markdown("<h3 style='text-align: center; color: #ff0044; font-family: Orbitron; text-shadow: 0 0 10px #ff0044;'>🔥 ALERTA DE MERCADO EN DIRECTO 🔥</h3><br>", unsafe_allow_html=True)
+            for i, r in df_vivo.iterrows():
+                st.markdown(f"""
+                    <div class='live-card'>
+                        <div style='display: flex; justify-content: space-between;'>
+                            <h3 style='color: white; margin: 0;'>🔴 {r['partido']}</h3>
+                            <span style='color: #ffffff; font-weight: bold; background: #ff0044; padding: 5px 15px; border-radius: 8px;'>CUOTA: {r['cuota']}</span>
+                        </div>
+                        <p style='color: #ffcccc; font-size: 1.1rem; font-weight: bold; margin-top: 10px;'>🎯 {r['mercado']}</p>
+                        <p style='color: #00f2ff; font-weight: bold;'>⚡ EV+ Instantáneo: {r['ev']}%</p>
+                        <p style='font-size: 0.95rem; color: #b3cce6; white-space: pre-line;'>{r.get('analisis', '')}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                if st.session_state['user_rol'] == 'admin':
+                    c_va, c_vb, c_vc = st.columns(3)
+                    if c_va.button(f"✅ Cobrar", key=f"wv_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'GANADA'}); st.rerun()
+                    if c_vb.button(f"❌ Fallado", key=f"lv_{r['id']}"): db.collection('pronosticos').document(r['id']).update({'estatus': 'PERDIDA'}); st.rerun()
+                    if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
+        else:
+            st.info("📡 Escaneando ineficiencias en directo... No hay alertas activas en este momento.")
+
     # --- ⚽ PESTAÑA FÚTBOL ---
     with tab_futbol:
         df_futbol = df_sencillas_activas[(df_sencillas_activas['deporte'] == 'Fútbol')]
@@ -234,7 +279,7 @@ if not df.empty:
                             </div>
                         """, unsafe_allow_html=True)
                         
-                        # --- NUEVO BLOQUE: RECÁLCULO DINÁMICO DE EV EN SENCILLAS ---
+                        # --- RECÁLCULO DINÁMICO DE EV EN SENCILLAS ---
                         st.markdown("<div style='background: rgba(0, 242, 255, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #00f2ff; margin-bottom: 20px;'>", unsafe_allow_html=True)
                         st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor Dinámico y Gestión (5.0% Bank):</b></p>", unsafe_allow_html=True)
                         
@@ -242,12 +287,11 @@ if not df.empty:
                         user_cuota = col_i1.number_input("Momio Actual:", value=float(r['cuota']), step=0.01, key=f"cuota_{r['id']}")
                         monto_invertir = col_i2.number_input("Tu Inversión ($):", value=float(sugerencia), key=f"inv_{r['id']}")
                         
-                        # Fórmula Matemática: EV = (ProbReal_Decimal * Cuota) - 1
                         prob_r = float(r.get('prob_real', 0)) / 100.0
                         nuevo_ev = (prob_r * user_cuota - 1) * 100
                         
                         with col_i3:
-                            st.write("") # Espaciador para alinear con los inputs
+                            st.write("") 
                             if nuevo_ev > 0:
                                 st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev:.1f}%)</span></div>", unsafe_allow_html=True)
                             else:
@@ -259,7 +303,6 @@ if not df.empty:
                                 })
                                 st.toast("¡Inversión guardada en el portafolio!")
                         st.markdown("</div>", unsafe_allow_html=True)
-                        # -----------------------------------------------------------
 
                         if st.session_state['user_rol'] == 'admin':
                             c_wa, c_wb, c_wc, c_wd = st.columns(4)
@@ -329,27 +372,25 @@ if not df.empty:
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # --- NUEVO BLOQUE: RECÁLCULO DINÁMICO DE EV EN PARLAYS ---
+                    # --- RECÁLCULO DINÁMICO DE EV EN PARLAYS ---
                     st.markdown("<div style='background: rgba(255, 204, 0, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #ffcc00; margin-top: 15px; margin-bottom: 20px;'>", unsafe_allow_html=True)
-                    sugerencia_parlay = bank_actual * 0.02 # 2% por ser Parlay (Alta varianza)
+                    sugerencia_parlay = bank_actual * 0.02 
                     st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor VIP y Gestión (2.0% Bank):</b></p>", unsafe_allow_html=True)
                     
                     col_ip1, col_ip2, col_ip3 = st.columns([1, 1, 1.5])
                     user_cuota_p = col_ip1.number_input("Momio Actual:", value=float(p['cuota']), step=0.01, key=f"cuota_p_{p['id']}")
                     monto_invertir_p = col_ip2.number_input("Tu Inversión ($):", value=float(sugerencia_parlay), key=f"inv_p_{p['id']}")
                     
-                    # Lógica de recálculo (Maneja parlays viejos sin prob_real guardada)
                     prob_real_guardada = float(p.get('prob_real', 0))
                     if prob_real_guardada > 0:
                         prob_r_p = prob_real_guardada / 100.0
                     else:
-                        # Si es un ticket viejo, calculamos la prob inversa a partir del EV original
                         prob_r_p = (float(p['ev']) / 100.0 + 1) / float(p['cuota'])
                         
                     nuevo_ev_p = (prob_r_p * user_cuota_p - 1) * 100
                     
                     with col_ip3:
-                        st.write("") # Espaciador
+                        st.write("") 
                         if nuevo_ev_p > 0:
                             st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev_p:.1f}%)</span></div>", unsafe_allow_html=True)
                         else:
@@ -361,7 +402,6 @@ if not df.empty:
                             })
                             st.toast("¡Ticket Dorado guardado en el portafolio!")
                     st.markdown("</div>", unsafe_allow_html=True)
-                    # -----------------------------------------------------------
 
                     if st.session_state['user_rol'] == 'admin':
                         c_pa, c_pb, c_pc, c_pd = st.columns(4)
@@ -530,3 +570,4 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
