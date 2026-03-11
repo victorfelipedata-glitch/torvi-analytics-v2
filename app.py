@@ -38,39 +38,41 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Conexión Firebase
-if not firebase_admin._apps:
-    dict_claves = json.loads(st.secrets["firebase_key"])
-    cred = credentials.Certificate(dict_claves)
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
+try:
+    if not firebase_admin._apps:
+        dict_claves = json.loads(st.secrets["firebase_key"])
+        cred = credentials.Certificate(dict_claves)
+        firebase_admin.initialize_app(cred)
+    db = firestore.client()
+except Exception:
+    st.error("⚠️ Error crítico al conectar con la base de datos central.")
+    st.stop()
 
 def encriptar_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# 🏦 MOTOR FINANCIERO CORREGIDO (No borra del portafolio, solo actualiza estatus y paga)
+# 🏦 MOTOR FINANCIERO CORREGIDO
 def resolver_apuesta(pick_id, resultado_final):
-    # 1. Actualiza el pronóstico global a GANADA o PERDIDA
-    db.collection('pronosticos').document(pick_id).update({'estatus': resultado_final})
-    
-    # 2. Busca todos los tickets en el portafolio de todos los usuarios
-    inversiones = db.collection('portafolio').where('id_pick', '==', pick_id).stream()
-    for inv in inversiones:
-        datos = inv.to_dict()
-        user_email = datos['user']
-        monto = float(datos.get('monto', 0))
-        cuota = float(datos.get('cuota', 1))
-        
-        # 3. Si se ganó, paga la ganancia al Bankroll del usuario
-        if resultado_final == 'GANADA':
-            pago_total = monto * cuota
-            u_ref = db.collection('usuarios').document(user_email)
-            u_doc = u_ref.get()
-            if u_doc.exists:
-                b_actual = float(u_doc.to_dict().get('bankroll', 0))
-                u_ref.update({'bankroll': b_actual + pago_total})
-                
-        # 4. ACTUALIZA el ticket en el portafolio para que quede el registro visual (NO LO BORRA)
-        db.collection('portafolio').document(inv.id).update({'estatus': resultado_final})
+    try:
+        db.collection('pronosticos').document(pick_id).update({'estatus': resultado_final})
+        inversiones = db.collection('portafolio').where('id_pick', '==', pick_id).stream()
+        for inv in inversiones:
+            datos = inv.to_dict()
+            user_email = datos['user']
+            monto = float(datos.get('monto', 0))
+            cuota = float(datos.get('cuota', 1))
+            
+            if resultado_final == 'GANADA':
+                pago_total = monto * cuota
+                u_ref = db.collection('usuarios').document(user_email)
+                u_doc = u_ref.get()
+                if u_doc.exists:
+                    b_actual = float(u_doc.to_dict().get('bankroll', 0))
+                    u_ref.update({'bankroll': b_actual + pago_total})
+                    
+            db.collection('portafolio').document(inv.id).update({'estatus': resultado_final})
+    except Exception as e:
+        st.toast("⚠️ Ocurrió un error procesando el pago.")
 
 # Seguridad y Sesión
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
@@ -114,10 +116,13 @@ if not st.session_state['autenticado']:
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# --- CARGA DE DATOS ---
-docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
-data_picks = [d.to_dict() for d in docs_picks]
-df = pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
+# --- CARGA DE DATOS BLINDADA (ANTIFALLOS) ---
+try:
+    docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
+    data_picks = [d.to_dict() for d in docs_picks]
+    df = pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
+except Exception:
+    df = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
 
 if not df.empty:
     if 'estatus' not in df.columns: df['estatus'] = 'PENDIENTE'
@@ -129,15 +134,29 @@ if not df.empty:
     df['liga'] = df['liga'].fillna('General')
     df['tipo'] = df['tipo'].fillna('Sencilla')
 
-docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).order_by('fecha', direction=firestore.Query.DESCENDING).stream()
-df_port = pd.DataFrame([d.to_dict() for d in docs_port]) if docs_port else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+# LA SOLUCIÓN AL ERROR DE FIREBASE: Se quita el order_by y se ordena con Pandas localmente
+try:
+    docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).stream()
+    port_data = [d.to_dict() for d in docs_port]
+    if port_data:
+        df_port = pd.DataFrame(port_data)
+        if 'fecha' in df_port.columns:
+            df_port = df_port.sort_values(by='fecha', ascending=False)
+    else:
+        df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+except Exception:
+    df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+
 if not df_port.empty and 'estatus' not in df_port.columns:
     df_port['estatus'] = 'PENDIENTE'
 
-user_ref = db.collection('usuarios').document(st.session_state['user_email'])
-bank_actual = float(user_ref.get().to_dict().get('bankroll', 1000.0)) if user_ref.get().exists else 1000.0
+try:
+    user_ref = db.collection('usuarios').document(st.session_state['user_email'])
+    bank_actual = float(user_ref.get().to_dict().get('bankroll', 1000.0)) if user_ref.get().exists else 1000.0
+except Exception:
+    bank_actual = 1000.0
 
-# --- BARRA SUPERIOR: LOGOUT SOLAMENTE ---
+# --- BARRA SUPERIOR: LOGOUT ---
 col_head1, col_head2 = st.columns([8, 2])
 if col_head2.button("🚪 CERRAR SESIÓN", use_container_width=True):
     st.session_state['autenticado'] = False
@@ -203,7 +222,6 @@ if not df.empty:
     df_activos = df[df['estatus'].fillna('PENDIENTE') == 'PENDIENTE']
     df_historial = df[df['estatus'].fillna('PENDIENTE') != 'PENDIENTE']
 
-    # CÁLCULO DE RACHA ACTUAL (ON FIRE)
     racha_actual = 0
     if not df_historial.empty:
         df_historial_ordenado = df_historial.sort_values(by='fecha', ascending=False)
@@ -211,7 +229,6 @@ if not df.empty:
             if row['estatus'] == 'GANADA': racha_actual += 1
             elif row['estatus'] == 'PERDIDA': break
 
-    # MÉTRICA DE EV+ EXCLUSIVA PARA SENCILLAS (EXCLUYENDO EN VIVO)
     m1, m2, m3, m4 = st.columns(4)
     df_sencillas_activas = df_activos[(df_activos['tipo'] != 'Parlay') & (df_activos['tipo'] != 'En Vivo')]
     max_ev = f"{df_sencillas_activas['ev'].max()}%" if not df_sencillas_activas.empty else "0%"
@@ -221,7 +238,6 @@ if not df.empty:
     m3.metric("🔥 RACHA ACTUAL", f"{racha_actual} AL HILO")
     m4.metric("🏦 BANKROLL", f"${bank_actual:,.2f}")
     
-    # 🗂️ PESTAÑAS PRINCIPALES
     tab_vivo, tab_futbol, tab_nba, tab_parlay, tab_port, tab_historial_tab, tab_tools = st.tabs(["🔴 EN VIVO", "⚽ FÚTBOL", "🏀 NBA", "💎 PARLAY VIP", "💼 PORTAFOLIO", "📈 HISTORIAL", "⚙️ PERFIL"])
     
     # --- 🔴 PESTAÑA EN VIVO ---
@@ -317,7 +333,6 @@ if not df.empty:
                             </div>
                         """, unsafe_allow_html=True)
                         
-                        # --- RECÁLCULO DINÁMICO DE EV EN SENCILLAS ---
                         st.markdown("<div style='background: rgba(0, 242, 255, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #00f2ff; margin-bottom: 20px;'>", unsafe_allow_html=True)
                         st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor Dinámico y Gestión (5.0% Bank):</b></p>", unsafe_allow_html=True)
                         
@@ -333,7 +348,7 @@ if not df.empty:
                             if nuevo_ev > 0:
                                 st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev:.1f}%)</span></div>", unsafe_allow_html=True)
                             else:
-                                st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev:.1f}%) - NO APOSTAR</span></div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev:.1f}%)</span></div>", unsafe_allow_html=True)
                             
                             if st.button("📥 Guardar y Descontar", key=f"btn_{r['id']}", use_container_width=True):
                                 if bank_actual >= monto_invertir:
@@ -347,7 +362,6 @@ if not df.empty:
                                     time.sleep(1); st.rerun()
                                 else: st.error("❌ Bankroll insuficiente.")
                         st.markdown("</div>", unsafe_allow_html=True)
-                        # -----------------------------------------------------------
 
                         if st.session_state['user_rol'] == 'admin':
                             c_wa, c_wb, c_wc, c_wd = st.columns(4)
@@ -417,7 +431,6 @@ if not df.empty:
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # --- RECÁLCULO DINÁMICO DE EV EN PARLAYS ---
                     st.markdown("<div style='background: rgba(255, 204, 0, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #ffcc00; margin-top: 15px; margin-bottom: 20px;'>", unsafe_allow_html=True)
                     sugerencia_parlay = bank_actual * 0.02 
                     st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor VIP y Gestión (2.0% Bank):</b></p>", unsafe_allow_html=True)
@@ -439,7 +452,7 @@ if not df.empty:
                         if nuevo_ev_p > 0:
                             st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev_p:.1f}%)</span></div>", unsafe_allow_html=True)
                         else:
-                            st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev_p:.1f}%) - DESCARTAR</span></div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev_p:.1f}%)</span></div>", unsafe_allow_html=True)
                         
                         if st.button("📥 Apostar Ticket Dorado", key=f"btn_p_{p['id']}", use_container_width=True):
                             if bank_actual >= monto_invertir_p:
@@ -453,7 +466,6 @@ if not df.empty:
                                 time.sleep(1); st.rerun()
                             else: st.error("❌ Bankroll insuficiente.")
                     st.markdown("</div>", unsafe_allow_html=True)
-                    # -----------------------------------------------------------
 
                     if st.session_state['user_rol'] == 'admin':
                         c_pa, c_pb, c_pc, c_pd = st.columns(4)
@@ -464,7 +476,7 @@ if not df.empty:
                     st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
 
-    # --- 💼 PESTAÑA PORTAFOLIO MODIFICADA ---
+    # --- 💼 PESTAÑA PORTAFOLIO ---
     with tab_port:
         st.markdown("### 💼 MIS INVERSIONES")
         if not df_port.empty:
