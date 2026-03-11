@@ -47,7 +47,7 @@ if 'user_email' not in st.session_state: st.session_state['user_email'] = 'defau
 # --- ENCABEZADO CON LOGO QUASAR ---
 st.markdown("""
     <div style='text-align: center; margin-bottom: 10px; margin-top: 20px;'>
-        <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/38bce5a4aa1f6ebf5cf113ebf193f03547f1dd2c/logo.jpg" width="350" style="border-radius: 15px; box-shadow: 0px 0px 30px rgba(188, 19, 254, 0.6);">
+        <img src="https://raw.githubusercontent.com/victorfelipedata-glitch/torvi-analytics-v2/57c54d118a85d753a818cc39f0e5ce9ab5a02a6a/nuevo_logo_quasar.png" width="350" style="border-radius: 15px; box-shadow: 0px 0px 30px rgba(188, 19, 254, 0.6);">
     </div>
     """, unsafe_allow_html=True)
 st.markdown('<p class="subtitulo">SISTEMA DE VENTAJA ESTADÍSTICA (EV+)</p>', unsafe_allow_html=True)
@@ -425,4 +425,5 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO|QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
+
 
