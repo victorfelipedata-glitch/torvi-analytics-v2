@@ -14,8 +14,8 @@ import numpy as np
 # Configuro mi página
 st.set_page_config(page_title="QUASAR ANALYTICS", layout="wide", initial_sidebar_state="collapsed")
 
-# 🔄 Auto-Refresh Silencioso (60 segundos)
-st_autorefresh(interval=60000, limit=None, key="quasar_autorefresh")
+# 🔄 Auto-Refresh Silencioso (30 segundos para soportar a tus usuarios VIP sin quemar Firebase)
+st_autorefresh(interval=30000, limit=None, key="quasar_autorefresh")
 
 # CSS Estilo Galáctico y Botones Premium
 st.markdown("""
@@ -143,13 +143,14 @@ if st.session_state['user_rol'] == 'admin':
                 st.info("Esta sección creará un ticket dorado exclusivo en la pestaña de Parlay VIP.")
                 titulo_parlay = st.text_input("👑 Título del Parlay:", placeholder="Ej: Combinada VIP Europea")
                 partidos_parlay = st.text_area("⚽ Partidos incluidos (uno por línea):")
-                c_p1, c_p2 = st.columns(2)
+                c_p1, c_p2, c_p3 = st.columns(3)
                 cuota_parlay = c_p1.number_input("📈 Cuota Total:", min_value=1.01, value=3.50, step=0.01)
                 ev_parlay = c_p2.number_input("🔥 EV+ Total %:", value=15.0)
+                prob_real_parlay = c_p3.number_input("🎯 Prob. Real Quasar %:", value=35.0)
                 ana_parlay = st.text_area("🧠 Justificación del Parlay:")
                 if st.form_submit_button("💎 PUBLICAR PARLAY VIP"):
                     p_id = f"{int(time.time())}"
-                    db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': 0, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
+                    db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': prob_real_parlay, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Parlay VIP publicado!"); st.rerun()
 
 # --- DASHBOARD PRINCIPAL ---
@@ -225,7 +226,7 @@ if not df.empty:
                                 <p style='color: #b3cce6; font-size: 0.8rem; margin: 0;'>🏆 {r.get('liga', 'General')}</p>
                                 <p style='color: #bc13fe; font-weight: bold; margin-top: 10px;'>🎯 {r['mercado']}</p>
                                 <div style='display: flex; gap: 15px; margin: 15px 0;'>
-                                    <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>CUOTA: <b>{r['cuota']}</b></div>
+                                    <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>CUOTA REFERENCIA: <b>{r['cuota']}</b></div>
                                     <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>PROB. CASA: <b>{r.get('prob_casa',0)}%</b></div>
                                     <div style='background: rgba(0,0,0,0.5); padding: 8px 15px; border-radius: 5px; color: #00f2ff; border: 1px solid #333;'>PROB. REAL: <b>{r.get('prob_real',0)}%</b></div>
                                 </div>
@@ -233,14 +234,32 @@ if not df.empty:
                             </div>
                         """, unsafe_allow_html=True)
                         
+                        # --- NUEVO BLOQUE: RECÁLCULO DINÁMICO DE EV EN SENCILLAS ---
                         st.markdown("<div style='background: rgba(0, 242, 255, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #00f2ff; margin-bottom: 20px;'>", unsafe_allow_html=True)
-                        st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Gestión de Riesgo:</b> Sugerencia del 5.0% de tu Bankroll</p>", unsafe_allow_html=True)
-                        col_i1, col_i2 = st.columns([1, 2])
-                        monto_invertir = col_i1.number_input("Tu Inversión ($):", value=float(sugerencia), key=f"inv_{r['id']}")
-                        if col_i2.button("📥 Guardar en Mi Portafolio", key=f"btn_{r['id']}"):
-                            db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({'user': st.session_state['user_email'], 'partido': r['partido'], 'mercado': r['mercado'], 'cuota': r['cuota'], 'monto': monto_invertir, 'fecha': datetime.now()})
-                            st.toast("¡Inversión guardada en el portafolio!")
+                        st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor Dinámico y Gestión (5.0% Bank):</b></p>", unsafe_allow_html=True)
+                        
+                        col_i1, col_i2, col_i3 = st.columns([1, 1, 1.5])
+                        user_cuota = col_i1.number_input("Momio Actual:", value=float(r['cuota']), step=0.01, key=f"cuota_{r['id']}")
+                        monto_invertir = col_i2.number_input("Tu Inversión ($):", value=float(sugerencia), key=f"inv_{r['id']}")
+                        
+                        # Fórmula Matemática: EV = (ProbReal_Decimal * Cuota) - 1
+                        prob_r = float(r.get('prob_real', 0)) / 100.0
+                        nuevo_ev = (prob_r * user_cuota - 1) * 100
+                        
+                        with col_i3:
+                            st.write("") # Espaciador para alinear con los inputs
+                            if nuevo_ev > 0:
+                                st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev:.1f}%)</span></div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev:.1f}%) - NO APOSTAR</span></div>", unsafe_allow_html=True)
+                            
+                            if st.button("📥 Guardar en Portafolio", key=f"btn_{r['id']}", use_container_width=True):
+                                db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
+                                    'user': st.session_state['user_email'], 'partido': r['partido'], 'mercado': r['mercado'], 'cuota': user_cuota, 'monto': monto_invertir, 'fecha': datetime.now()
+                                })
+                                st.toast("¡Inversión guardada en el portafolio!")
                         st.markdown("</div>", unsafe_allow_html=True)
+                        # -----------------------------------------------------------
 
                         if st.session_state['user_rol'] == 'admin':
                             c_wa, c_wb, c_wc, c_wd = st.columns(4)
@@ -257,43 +276,24 @@ if not df.empty:
         st.info("Aún no inicia la cobertura de la duela.")
 
     # --- 💎 PESTAÑA PARLAY VIP ---
-else:
-                    st.markdown(f"""
-                        <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
-                            <h3 style='color: white;'>{p['partido']}</h3>
-                            <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
-                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA FINAL: {p['cuota']} | EV+: {p['ev']}%</p>
-                            <p style='font-size: 0.95rem; color: white; white-space: pre-line;'>{p.get('analisis','')}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # --- NUEVO BLOQUE: GESTIÓN DE RIESGO Y PORTAFOLIO PARA PARLAY ---
-                    st.markdown("<div style='background: rgba(255, 204, 0, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #ffcc00; margin-top: 15px; margin-bottom: 20px;'>", unsafe_allow_html=True)
-                    sugerencia_parlay = bank_actual * 0.02 # 2% por ser Parlay (Alta varianza)
-                    st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Gestión de Riesgo VIP:</b> Sugerencia del 2.0% de tu Bankroll</p>", unsafe_allow_html=True)
-                    col_ip1, col_ip2 = st.columns([1, 2])
-                    monto_invertir_p = col_ip1.number_input("Tu Inversión ($):", value=float(sugerencia_parlay), key=f"inv_p_{p['id']}")
-                    if col_ip2.button("📥 Guardar Ticket en Mi Portafolio", key=f"btn_p_{p['id']}"):
-                        db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
-                            'user': st.session_state['user_email'], 
-                            'partido': p['partido'], 
-                            'mercado': 'Combinada VIP', 
-                            'cuota': p['cuota'], 
-                            'monto': monto_invertir_p, 
-                            'fecha': datetime.now()
-                        })
-                        st.toast("¡Ticket Dorado guardado en el portafolio!")
-                    st.markdown("</div>", unsafe_allow_html=True)
-                    # ----------------------------------------------------------------
+    with tab_parlay:
+        df_parlays = df_activos[df_activos['tipo'] == 'Parlay']
+        
+        # Alerta Sonora
+        if not df_parlays.empty:
+            ultimo_parlay_id = df_parlays.iloc[0]['id']
+            if 'last_parlay_alert' not in st.session_state:
+                st.session_state['last_parlay_alert'] = ultimo_parlay_id
+            elif st.session_state['last_parlay_alert'] != ultimo_parlay_id:
+                st.session_state['last_parlay_alert'] = ultimo_parlay_id
+                st.markdown("""<audio autoplay><source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg"></audio>""", unsafe_allow_html=True)
+                st.toast("🚨 ¡NUEVO PARLAY VIP DISPONIBLE!", icon="💎")
 
-                    # Botones de Admin
-                    if st.session_state['user_rol'] == 'admin':
-                        c_pa, c_pb, c_pc, c_pd = st.columns(4)
-                        if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
-                        if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'PERDIDA'}); st.rerun()
-                        if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
-                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
-                    st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+            <div style='background: linear-gradient(135deg, #1a0b2e 0%, #bc13fe 100%); padding: 25px; border-radius: 20px; border: 2px solid #ffcc00; box-shadow: 0px 0px 20px rgba(188, 19, 254, 0.5);'>
+                <h2 style='text-align: center; color: #ffcc00; font-family: Orbitron; margin:0;'>👑 PARLAY EXCLUSIVO VIP</h2>
+            </div><br>
+        """, unsafe_allow_html=True)
         
         if not df_parlays.empty:
             for i, p in df_parlays.iterrows():
@@ -324,11 +324,45 @@ else:
                         <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
                             <h3 style='color: white;'>{p['partido']}</h3>
                             <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
-                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA FINAL: {p['cuota']} | EV+: {p['ev']}%</p>
+                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA DE REFERENCIA: {p['cuota']} | EV+: {p['ev']}%</p>
                             <p style='font-size: 0.95rem; color: white; white-space: pre-line;'>{p.get('analisis','')}</p>
                         </div>
                     """, unsafe_allow_html=True)
                     
+                    # --- NUEVO BLOQUE: RECÁLCULO DINÁMICO DE EV EN PARLAYS ---
+                    st.markdown("<div style='background: rgba(255, 204, 0, 0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #ffcc00; margin-top: 15px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                    sugerencia_parlay = bank_actual * 0.02 # 2% por ser Parlay (Alta varianza)
+                    st.markdown(f"<p style='color: white; margin-bottom: 5px;'>💡 <b>Calculadora de Valor VIP y Gestión (2.0% Bank):</b></p>", unsafe_allow_html=True)
+                    
+                    col_ip1, col_ip2, col_ip3 = st.columns([1, 1, 1.5])
+                    user_cuota_p = col_ip1.number_input("Momio Actual:", value=float(p['cuota']), step=0.01, key=f"cuota_p_{p['id']}")
+                    monto_invertir_p = col_ip2.number_input("Tu Inversión ($):", value=float(sugerencia_parlay), key=f"inv_p_{p['id']}")
+                    
+                    # Lógica de recálculo (Maneja parlays viejos sin prob_real guardada)
+                    prob_real_guardada = float(p.get('prob_real', 0))
+                    if prob_real_guardada > 0:
+                        prob_r_p = prob_real_guardada / 100.0
+                    else:
+                        # Si es un ticket viejo, calculamos la prob inversa a partir del EV original
+                        prob_r_p = (float(p['ev']) / 100.0 + 1) / float(p['cuota'])
+                        
+                    nuevo_ev_p = (prob_r_p * user_cuota_p - 1) * 100
+                    
+                    with col_ip3:
+                        st.write("") # Espaciador
+                        if nuevo_ev_p > 0:
+                            st.markdown(f"<div style='background: rgba(0,255,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #00ff00; text-align: center;'><span style='color:#00ff00; font-weight:bold;'>✅ AÚN HAY VALOR (EV+ {nuevo_ev_p:.1f}%)</span></div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div style='background: rgba(255,0,0,0.1); padding: 5px; border-radius: 5px; border: 1px solid #ff0000; text-align: center;'><span style='color:#ff0000; font-weight:bold;'>❌ LÍNEA CAÍDA (EV {nuevo_ev_p:.1f}%) - DESCARTAR</span></div>", unsafe_allow_html=True)
+                        
+                        if st.button("📥 Guardar Ticket en Mi Portafolio", key=f"btn_p_{p['id']}", use_container_width=True):
+                            db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
+                                'user': st.session_state['user_email'], 'partido': p['partido'], 'mercado': 'Combinada VIP', 'cuota': user_cuota_p, 'monto': monto_invertir_p, 'fecha': datetime.now()
+                            })
+                            st.toast("¡Ticket Dorado guardado en el portafolio!")
+                    st.markdown("</div>", unsafe_allow_html=True)
+                    # -----------------------------------------------------------
+
                     if st.session_state['user_rol'] == 'admin':
                         c_pa, c_pb, c_pc, c_pd = st.columns(4)
                         if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): db.collection('pronosticos').document(p['id']).update({'estatus': 'GANADA'}); st.rerun()
@@ -436,7 +470,6 @@ else:
         with calc_montecarlo:
             st.info("Simula 1,000 realidades alternativas de tus próximas apuestas usando tu Win Rate actual para calcular el crecimiento esperado y tu peor racha posible (Drawdown).")
             
-            # Variables predeterminadas basadas en historial o valores base
             wr_actual = float(wr) if 'wr' in locals() and wr > 0 else 65.0
             
             c_mc1, c_mc2, c_mc3 = st.columns(3)
@@ -450,7 +483,6 @@ else:
                     simulaciones = 1000
                     win_rate_prob = mc_wr / 100.0
                     
-                    # Matriz de resultados
                     bankrolls = np.zeros((simulaciones, mc_apuestas + 1))
                     bankrolls[:, 0] = bank_actual
                     
@@ -463,20 +495,16 @@ else:
                             else:
                                 bankrolls[i, j] = bankrolls[i, j-1] - apuesta
 
-                    # Extraer métricas clave
                     bankroll_final_promedio = np.mean(bankrolls[:, -1])
                     peor_escenario = np.min(bankrolls[:, -1])
                     mejor_escenario = np.max(bankrolls[:, -1])
                     
-                    # Gráfica de estilo Quasar
                     fig_mc = go.Figure()
                     
-                    # Dibujar 100 líneas aleatorias (opacidad baja)
                     indices_muestra = np.random.choice(simulaciones, 100, replace=False)
                     for idx in indices_muestra:
                         fig_mc.add_trace(go.Scatter(y=bankrolls[idx], mode='lines', line=dict(color='rgba(0, 242, 255, 0.05)', width=1), showlegend=False))
                     
-                    # Dibujar línea promedio (Morado neón)
                     promedio_historico = np.mean(bankrolls, axis=0)
                     fig_mc.add_trace(go.Scatter(y=promedio_historico, mode='lines', line=dict(color='#bc13fe', width=4), name='Crecimiento Esperado'))
                     
@@ -502,6 +530,3 @@ st.markdown("""
         © 2026 DESARROLLADO POR TORVI ANTONIO | QUASAR ANALYTICS
     </p>
 """, unsafe_allow_html=True)
-
-
-
