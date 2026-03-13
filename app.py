@@ -475,50 +475,60 @@ if not df.empty:
                         if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
                     st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
-
-   # --- 💼 PESTAÑA PORTAFOLIO ---
+# --- 💼 PESTAÑA PORTAFOLIO ---
     with tab_port:
         st.markdown("### 💼 MIS INVERSIONES")
+        
+        # 🕵️‍♂️ MODO DEBUG (Bórralo después de que funcione)
+        # st.write("IDs en Master:", df['id'].unique() if not df.empty else "Vacío")
+        
         if not df_port.empty:
-            
-            # 🚀 SINCRONIZACIÓN MAESTRA (Fuerza el estatus real desde la tabla Admin)
+            # 🚀 SINCRONIZACIÓN MAESTRA ULTRA-REFORZADA 🚀
             if not df.empty and 'id_pick' in df_port.columns:
-                # Creamos un mapa rápido de {id: estatus} desde la tabla principal
-                mapa_estatus = dict(zip(df['id'], df['estatus']))
-                # Sobrescribimos el estatus del portafolio con la verdad del Admin
-                df_port['estatus'] = df_port['id_pick'].map(mapa_estatus).fillna(df_port['estatus'])
-
-            df_port['estatus'] = df_port.get('estatus', 'PENDIENTE').fillna('PENDIENTE')
-            df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
+                # 1. Limpiamos estatus viejo y preparamos IDs como texto
+                df_master_clean = df[['id', 'estatus']].copy()
+                df_master_clean['id'] = df_master_clean['id'].astype(str)
+                df_port['id_pick'] = df_port['id_pick'].astype(str)
+                
+                # 2. Borramos el estatus viejo del portafolio para que no estorbe
+                df_port = df_port.drop(columns=['estatus'], errors='ignore')
+                
+                # 3. Fusionamos: Traemos el estatus REAL desde el Admin
+                df_port = df_port.merge(
+                    df_master_clean, 
+                    left_on='id_pick', 
+                    right_on='id', 
+                    how='left'
+                )
             
+            # 4. Si después del merge algo salió mal, ponemos PENDIENTE por defecto
+            df_port['estatus'] = df_port['estatus'].fillna('PENDIENTE')
+            
+            df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
             inversion_total = df_port_pendientes['monto'].sum()
             st.markdown(f"<p style='font-size: 1.2rem; color: #00f2ff;'>Total en Riesgo Activo: <b>${inversion_total:,.2f}</b></p>", unsafe_allow_html=True)
             
             for i, r in df_port.iterrows():
-                estatus = r.get('estatus', 'PENDIENTE')
+                estatus = r['estatus']
+                borde, badge = ("#00ff00", "✅ GANADA") if estatus == 'GANADA' else \
+                               ("#ff0000", "❌ PERDIDA") if estatus == 'PERDIDA' else \
+                               ("#bc13fe", "⏳ PENDIENTE")
                 
-                # Definición visual según el estatus sincronizado
-                if estatus == 'GANADA':
-                    borde = "#00ff00"
-                    badge = "<span style='color:#00ff00; font-weight:bold; background:rgba(0,255,0,0.1); padding:2px 8px; border-radius:4px;'>✅ GANADA</span>"
-                elif estatus == 'PERDIDA':
-                    borde = "#ff0000"
-                    badge = "<span style='color:#ff0000; font-weight:bold; background:rgba(255,0,0,0.1); padding:2px 8px; border-radius:4px;'>❌ PERDIDA</span>"
-                else:
-                    borde = "#bc13fe"
-                    badge = "<span style='color:#ffcc00; font-weight:bold; background:rgba(255,204,0,0.1); padding:2px 8px; border-radius:4px;'>⏳ PENDIENTE</span>"
-                    
+                # Ajustamos colores de los badges
+                b_color = "#00ff00" if estatus == 'GANADA' else "#ff0000" if estatus == 'PERDIDA' else "#ffcc00"
+                b_bg = "rgba(0,255,0,0.1)" if estatus == 'GANADA' else "rgba(255,0,0,0.1)" if estatus == 'PERDIDA' else "rgba(255,204,0,0.1)"
+                
                 st.markdown(f"""
                     <div style='border-left: 4px solid {borde}; padding: 15px; background: rgba(0,0,0,0.4); border-radius: 5px; margin-bottom: 10px;'>
                         <div style='display:flex; justify-content:space-between; align-items:center;'>
                             <b style='color:white; font-size:1.1rem;'>{r['partido']}</b>
-                            {badge}
+                            <span style='color:{b_color}; font-weight:bold; background:{b_bg}; padding:2px 8px; border-radius:4px;'>{badge}</span>
                         </div>
                         <span style='color:#b3cce6;'>{r['mercado']} | Momio: {r['cuota']} | Inversión: <b style='color:white;'>${r['monto']:,.2f}</b></span>
                     </div>
                 """, unsafe_allow_html=True)
-        else: 
-            st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar y Descontar' en el radar.")
+        else:
+            st.info("Aún no tienes apuestas guardadas.")
 
     # --- 📈 PESTAÑA HISTORIAL Y YIELD ---
     with tab_historial_tab:
