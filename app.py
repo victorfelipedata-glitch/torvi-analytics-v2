@@ -476,10 +476,18 @@ if not df.empty:
                     st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
 
-    # --- 💼 PESTAÑA PORTAFOLIO ---
+   # --- 💼 PESTAÑA PORTAFOLIO ---
     with tab_port:
         st.markdown("### 💼 MIS INVERSIONES")
         if not df_port.empty:
+            
+            # 🚀 SINCRONIZACIÓN MAESTRA (Fuerza el estatus real desde la tabla Admin)
+            if not df.empty and 'id_pick' in df_port.columns:
+                # Creamos un mapa rápido de {id: estatus} desde la tabla principal
+                mapa_estatus = dict(zip(df['id'], df['estatus']))
+                # Sobrescribimos el estatus del portafolio con la verdad del Admin
+                df_port['estatus'] = df_port['id_pick'].map(mapa_estatus).fillna(df_port['estatus'])
+
             df_port['estatus'] = df_port.get('estatus', 'PENDIENTE').fillna('PENDIENTE')
             df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
             
@@ -488,6 +496,8 @@ if not df.empty:
             
             for i, r in df_port.iterrows():
                 estatus = r.get('estatus', 'PENDIENTE')
+                
+                # Definición visual según el estatus sincronizado
                 if estatus == 'GANADA':
                     borde = "#00ff00"
                     badge = "<span style='color:#00ff00; font-weight:bold; background:rgba(0,255,0,0.1); padding:2px 8px; border-radius:4px;'>✅ GANADA</span>"
@@ -507,7 +517,8 @@ if not df.empty:
                         <span style='color:#b3cce6;'>{r['mercado']} | Momio: {r['cuota']} | Inversión: <b style='color:white;'>${r['monto']:,.2f}</b></span>
                     </div>
                 """, unsafe_allow_html=True)
-        else: st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar y Descontar' en el radar.")
+        else: 
+            st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar y Descontar' en el radar.")
 
     # --- 📈 PESTAÑA HISTORIAL Y YIELD ---
     with tab_historial_tab:
