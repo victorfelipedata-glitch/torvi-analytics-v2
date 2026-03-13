@@ -51,12 +51,17 @@ except Exception:
 def encriptar_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# 🏦 MOTOR FINANCIERO CORREGIDO
+# 🏦 MOTOR FINANCIERO CORREGIDO Y BLINDADO
 def resolver_apuesta(pick_id, resultado_final):
     try:
-        db.collection('pronosticos').document(pick_id).update({'estatus': resultado_final})
-        inversiones = db.collection('portafolio').where('id_pick', '==', pick_id).stream()
+        p_id = str(pick_id) # Forzamos a texto para evitar errores de tipo en Firebase
+        db.collection('pronosticos').document(p_id).update({'estatus': resultado_final})
+        
+        inversiones = db.collection('portafolio').where('id_pick', '==', p_id).stream()
+        
+        conteo = 0
         for inv in inversiones:
+            conteo += 1
             datos = inv.to_dict()
             user_email = datos['user']
             monto = float(datos.get('monto', 0))
@@ -68,11 +73,12 @@ def resolver_apuesta(pick_id, resultado_final):
                 u_doc = u_ref.get()
                 if u_doc.exists:
                     b_actual = float(u_doc.to_dict().get('bankroll', 0))
-                    u_ref.update({'bankroll': b_actual + pago_total})
+                    u_ref.update({'bankroll': round(b_actual + pago_total, 2)})
                     
             db.collection('portafolio').document(inv.id).update({'estatus': resultado_final})
+        st.toast(f"✅ Motor ejecutado: Se actualizaron {conteo} portafolios.")
     except Exception as e:
-        st.toast("⚠️ Ocurrió un error procesando el pago.")
+        st.toast(f"⚠️ Ocurrió un error procesando el pago: {e}")
 
 # Seguridad y Sesión
 if 'autenticado' not in st.session_state: st.session_state['autenticado'] = False
@@ -143,9 +149,9 @@ try:
         if 'fecha' in df_port.columns:
             df_port = df_port.sort_values(by='fecha', ascending=False)
     else:
-        df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+        df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
 except Exception:
-    df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus'])
+    df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
 
 if not df_port.empty and 'estatus' not in df_port.columns:
     df_port['estatus'] = 'PENDIENTE'
@@ -182,7 +188,7 @@ if st.session_state['user_rol'] == 'admin':
                 ev_val = c_n4.number_input("🔥 EV+ %:", value=10.0)
                 ana = st.text_area("🧠 Análisis Táctico y Matemático:")
                 if st.form_submit_button("🚀 PUBLICAR SENCILLA"):
-                    p_id = f"{int(time.time())}"
+                    p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': partido, 'mercado': mercado, 'deporte': deporte, 'liga': liga, 'tipo': 'Sencilla', 'cuota': cuota, 'prob_casa': prob_casa, 'prob_real': prob_real, 'ev': ev_val, 'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Pick publicado!"); st.rerun()
                     
@@ -197,7 +203,7 @@ if st.session_state['user_rol'] == 'admin':
                 prob_real_parlay = c_p3.number_input("🎯 Prob. Real Quasar %:", value=35.0)
                 ana_parlay = st.text_area("🧠 Justificación del Parlay:")
                 if st.form_submit_button("💎 PUBLICAR PARLAY VIP"):
-                    p_id = f"{int(time.time())}"
+                    p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': prob_real_parlay, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Parlay VIP publicado!"); st.rerun()
 
@@ -212,7 +218,7 @@ if st.session_state['user_rol'] == 'admin':
                 ev_vivo = c_vn2.number_input("🔥 EV+ Instantáneo %:", value=20.0)
                 ana_vivo = st.text_area("🧠 Razón rápida del pick en vivo:")
                 if st.form_submit_button("🔴 LANZAR ALERTA EN VIVO"):
-                    p_id = f"{int(time.time())}"
+                    p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': partido_vivo, 'mercado': mercado_vivo, 'deporte': 'Fútbol', 'liga': 'LIVE', 'tipo': 'En Vivo', 'cuota': cuota_vivo, 'prob_casa': 0, 'prob_real': 0, 'ev': ev_vivo, 'analisis': ana_vivo, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
                     st.success("¡Alerta en vivo enviada!"); st.rerun()
 
@@ -264,7 +270,7 @@ if not df.empty:
                     if bank_actual >= monto_vivo:
                         db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_vivo})
                         db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
-                            'id_pick': r['id'], 'user': st.session_state['user_email'], 'partido': r['partido'], 
+                            'id_pick': str(r['id']), 'user': st.session_state['user_email'], 'partido': r['partido'], 
                             'mercado': r['mercado'], 'cuota': r['cuota'], 'monto': monto_vivo, 'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                         })
                         st.toast("¡Apuesta registrada y cobrada del Bankroll!")
@@ -275,7 +281,7 @@ if not df.empty:
                     c_va, c_vb, c_vc = st.columns(3)
                     if c_va.button(f"✅ Cobrar", key=f"wv_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
                     if c_vb.button(f"❌ Fallado", key=f"lv_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
-                    if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
+                    if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.rerun()
         else:
             st.info("📡 Escaneando ineficiencias en directo... No hay alertas activas en este momento.")
 
@@ -314,7 +320,7 @@ if not df.empty:
                             n_ana = st.text_area("Nuevo Análisis:", value=str(r.get('analisis','')))
                             col_sf1, col_sf2 = st.columns(2)
                             if col_sf1.form_submit_button("💾 Guardar"):
-                                db.collection('pronosticos').document(r['id']).update({'cuota': n_cuota, 'ev': n_ev, 'analisis': n_ana})
+                                db.collection('pronosticos').document(str(r['id'])).update({'cuota': n_cuota, 'ev': n_ev, 'analisis': n_ana})
                                 st.session_state[edit_key] = False; st.rerun()
                             if col_sf2.form_submit_button("❌ Cancelar"): st.session_state[edit_key] = False; st.rerun()
                         st.markdown("</div>", unsafe_allow_html=True)
@@ -354,7 +360,7 @@ if not df.empty:
                                 if bank_actual >= monto_invertir:
                                     db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_invertir})
                                     db.collection('portafolio').document(f"{st.session_state['user_email']}_{r['id']}").set({
-                                        'id_pick': r['id'], 'user': st.session_state['user_email'], 'partido': r['partido'], 
+                                        'id_pick': str(r['id']), 'user': st.session_state['user_email'], 'partido': r['partido'], 
                                         'mercado': r['mercado'], 'cuota': user_cuota, 'monto': monto_invertir, 
                                         'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                                     })
@@ -368,7 +374,7 @@ if not df.empty:
                             if c_wa.button(f"✅ Ganada", key=f"w_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
                             if c_wb.button(f"❌ Perdida", key=f"l_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
                             if c_wc.button(f"✏️ Editar", key=f"edt_{r['id']}"): st.session_state[edit_key] = True; st.rerun()
-                            if c_wd.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(r['id']).delete(); st.rerun()
+                            if c_wd.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.rerun()
                         st.markdown("<hr style='opacity: 0.2;'>", unsafe_allow_html=True)
             else: st.info("No hay partidos para esta liga específica.")
         else: st.info("El radar de fútbol está despejado.")
@@ -415,7 +421,7 @@ if not df.empty:
                         
                         col_sp1, col_sp2 = st.columns(2)
                         if col_sp1.form_submit_button("💾 Guardar"):
-                            db.collection('pronosticos').document(p['id']).update({
+                            db.collection('pronosticos').document(str(p['id'])).update({
                                 'partido': n_titulo, 'mercado': n_mercado, 'cuota': n_cuota_p, 'ev': n_ev_p, 'analisis': n_ana_p
                             })
                             st.session_state[edit_key_p] = False; st.rerun()
@@ -458,7 +464,7 @@ if not df.empty:
                             if bank_actual >= monto_invertir_p:
                                 db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': bank_actual - monto_invertir_p})
                                 db.collection('portafolio').document(f"{st.session_state['user_email']}_{p['id']}").set({
-                                    'id_pick': p['id'], 'user': st.session_state['user_email'], 'partido': p['partido'], 
+                                    'id_pick': str(p['id']), 'user': st.session_state['user_email'], 'partido': p['partido'], 
                                     'mercado': 'Combinada VIP', 'cuota': user_cuota_p, 'monto': monto_invertir_p, 
                                     'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                                 })
@@ -472,28 +478,22 @@ if not df.empty:
                         if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): resolver_apuesta(p['id'], 'GANADA'); st.rerun()
                         if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): resolver_apuesta(p['id'], 'PERDIDA'); st.rerun()
                         if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
-                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(p['id']).delete(); st.rerun()
+                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(str(p['id'])).delete(); st.rerun()
                     st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
-# --- 💼 PESTAÑA PORTAFOLIO ---
+
+    # --- 💼 PESTAÑA PORTAFOLIO (Escudo Quasar Integrado) ---
     with tab_port:
         st.markdown("### 💼 MIS INVERSIONES")
-        
-        # 🕵️‍♂️ MODO DEBUG (Bórralo después de que funcione)
-        # st.write("IDs en Master:", df['id'].unique() if not df.empty else "Vacío")
         
         if not df_port.empty:
             # 🚀 SINCRONIZACIÓN MAESTRA ULTRA-REFORZADA 🚀
             if not df.empty and 'id_pick' in df_port.columns:
-                # 1. Limpiamos estatus viejo y preparamos IDs como texto
                 df_master_clean = df[['id', 'estatus']].copy()
                 df_master_clean['id'] = df_master_clean['id'].astype(str)
                 df_port['id_pick'] = df_port['id_pick'].astype(str)
                 
-                # 2. Borramos el estatus viejo del portafolio para que no estorbe
                 df_port = df_port.drop(columns=['estatus'], errors='ignore')
-                
-                # 3. Fusionamos: Traemos el estatus REAL desde el Admin
                 df_port = df_port.merge(
                     df_master_clean, 
                     left_on='id_pick', 
@@ -501,7 +501,6 @@ if not df.empty:
                     how='left'
                 )
             
-            # 4. Si después del merge algo salió mal, ponemos PENDIENTE por defecto
             df_port['estatus'] = df_port['estatus'].fillna('PENDIENTE')
             
             df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
@@ -514,7 +513,6 @@ if not df.empty:
                                ("#ff0000", "❌ PERDIDA") if estatus == 'PERDIDA' else \
                                ("#bc13fe", "⏳ PENDIENTE")
                 
-                # Ajustamos colores de los badges
                 b_color = "#00ff00" if estatus == 'GANADA' else "#ff0000" if estatus == 'PERDIDA' else "#ffcc00"
                 b_bg = "rgba(0,255,0,0.1)" if estatus == 'GANADA' else "rgba(255,0,0,0.1)" if estatus == 'PERDIDA' else "rgba(255,204,0,0.1)"
                 
@@ -528,7 +526,7 @@ if not df.empty:
                     </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("Aún no tienes apuestas guardadas.")
+            st.info("Aún no tienes apuestas guardadas. Usa el botón 'Guardar y Descontar' en el radar.")
 
     # --- 📈 PESTAÑA HISTORIAL Y YIELD ---
     with tab_historial_tab:
@@ -573,7 +571,7 @@ if not df.empty:
                     st.markdown(f"<p style='color:{color};'>Cuota: {r['cuota']} | Ventaja: {r['ev']}%</p>", unsafe_allow_html=True)
                     if st.session_state['user_rol'] == 'admin':
                         if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}"): 
-                            db.collection('pronosticos').document(r['id']).update({'estatus': 'PENDIENTE'})
+                            db.collection('pronosticos').document(str(r['id'])).update({'estatus': 'PENDIENTE'})
                             st.rerun()
         else: st.info("El historial aparecerá aquí conforme se resuelvan los partidos.")
 
