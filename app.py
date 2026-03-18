@@ -77,6 +77,7 @@ def resolver_apuesta(pick_id, resultado_final):
                     
             db.collection('portafolio').document(inv.id).update({'estatus': resultado_final})
         st.toast(f"✅ Motor ejecutado: Se actualizaron {conteo} portafolios.")
+        st.cache_data.clear() # <- LIMPIEZA DE CACHÉ PARA REFLEJAR SALDOS
     except Exception as e:
         st.toast(f"⚠️ Ocurrió un error procesando el pago: {e}")
 
@@ -122,13 +123,18 @@ if not st.session_state['autenticado']:
         st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
 
-# --- CARGA DE DATOS BLINDADA (ANTIFALLOS) ---
-try:
-    docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
-    data_picks = [d.to_dict() for d in docs_picks]
-    df = pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
-except Exception:
-    df = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
+# --- CARGA DE DATOS BLINDADA Y CACHEADA (ANTIFALLOS Y ANTI-QUEMADO) ---
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cargar_pronosticos():
+    try:
+        docs_picks = db.collection('pronosticos').order_by('fecha', direction=firestore.Query.DESCENDING).stream()
+        data_picks = [d.to_dict() for d in docs_picks]
+        return pd.DataFrame(data_picks) if data_picks else pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
+    except Exception:
+        return pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'prob_casa', 'prob_real', 'ev', 'analisis', 'estatus', 'id', 'deporte', 'liga', 'tipo', 'fecha'])
+
+df = cargar_pronosticos()
 
 if not df.empty:
     if 'estatus' not in df.columns: df['estatus'] = 'PENDIENTE'
@@ -140,32 +146,40 @@ if not df.empty:
     df['liga'] = df['liga'].fillna('General')
     df['tipo'] = df['tipo'].fillna('Sencilla')
 
-# LA SOLUCIÓN AL ERROR DE FIREBASE: Se quita el order_by y se ordena con Pandas localmente
-try:
-    docs_port = db.collection('portafolio').where('user', '==', st.session_state['user_email']).stream()
-    port_data = [d.to_dict() for d in docs_port]
-    if port_data:
-        df_port = pd.DataFrame(port_data)
-        if 'fecha' in df_port.columns:
-            df_port = df_port.sort_values(by='fecha', ascending=False)
-    else:
-        df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
-except Exception:
-    df_port = pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
+@st.cache_data(ttl=30, show_spinner=False)
+def cargar_portafolio(user_email):
+    try:
+        docs_port = db.collection('portafolio').where('user', '==', user_email).stream()
+        port_data = [d.to_dict() for d in docs_port]
+        if port_data:
+            df_p = pd.DataFrame(port_data)
+            if 'fecha' in df_p.columns:
+                df_p = df_p.sort_values(by='fecha', ascending=False)
+            return df_p
+        return pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
+    except Exception:
+        return pd.DataFrame(columns=['partido', 'mercado', 'cuota', 'monto', 'estatus', 'id_pick'])
+
+df_port = cargar_portafolio(st.session_state['user_email'])
 
 if not df_port.empty and 'estatus' not in df_port.columns:
     df_port['estatus'] = 'PENDIENTE'
 
-try:
-    user_ref = db.collection('usuarios').document(st.session_state['user_email'])
-    bank_actual = float(user_ref.get().to_dict().get('bankroll', 1000.0)) if user_ref.get().exists else 1000.0
-except Exception:
-    bank_actual = 1000.0
+@st.cache_data(ttl=30, show_spinner=False)
+def cargar_bankroll(user_email):
+    try:
+        u_ref = db.collection('usuarios').document(user_email).get()
+        return float(u_ref.to_dict().get('bankroll', 1000.0)) if u_ref.exists else 1000.0
+    except Exception:
+        return 1000.0
+
+bank_actual = cargar_bankroll(st.session_state['user_email'])
 
 # --- BARRA SUPERIOR: LOGOUT ---
 col_head1, col_head2 = st.columns([8, 2])
 if col_head2.button("🚪 CERRAR SESIÓN", use_container_width=True):
     st.session_state['autenticado'] = False
+    st.cache_data.clear()
     st.rerun()
 
 # --- PANEL DE ADMIN ---
@@ -190,7 +204,7 @@ if st.session_state['user_rol'] == 'admin':
                 if st.form_submit_button("🚀 PUBLICAR SENCILLA"):
                     p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': partido, 'mercado': mercado, 'deporte': deporte, 'liga': liga, 'tipo': 'Sencilla', 'cuota': cuota, 'prob_casa': prob_casa, 'prob_real': prob_real, 'ev': ev_val, 'analisis': ana, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
-                    st.success("¡Pick publicado!"); st.rerun()
+                    st.success("¡Pick publicado!"); st.cache_data.clear(); st.rerun()
                     
         with tab_admin_parlay:
             with st.form("nuevo_parlay"):
@@ -205,7 +219,7 @@ if st.session_state['user_rol'] == 'admin':
                 if st.form_submit_button("💎 PUBLICAR PARLAY VIP"):
                     p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': titulo_parlay, 'mercado': partidos_parlay, 'deporte': 'Varios', 'liga': 'VIP', 'tipo': 'Parlay', 'cuota': cuota_parlay, 'prob_casa': 0, 'prob_real': prob_real_parlay, 'ev': ev_parlay, 'analisis': ana_parlay, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
-                    st.success("¡Parlay VIP publicado!"); st.rerun()
+                    st.success("¡Parlay VIP publicado!"); st.cache_data.clear(); st.rerun()
 
         with tab_admin_vivo:
             with st.form("nuevo_pick_vivo"):
@@ -220,7 +234,7 @@ if st.session_state['user_rol'] == 'admin':
                 if st.form_submit_button("🔴 LANZAR ALERTA EN VIVO"):
                     p_id = str(int(time.time()))
                     db.collection('pronosticos').document(p_id).set({'id': p_id, 'partido': partido_vivo, 'mercado': mercado_vivo, 'deporte': 'Fútbol', 'liga': 'LIVE', 'tipo': 'En Vivo', 'cuota': cuota_vivo, 'prob_casa': 0, 'prob_real': 0, 'ev': ev_vivo, 'analisis': ana_vivo, 'estatus': 'PENDIENTE', 'fecha': datetime.now()})
-                    st.success("¡Alerta en vivo enviada!"); st.rerun()
+                    st.success("¡Alerta en vivo enviada!"); st.cache_data.clear(); st.rerun()
 
 # --- DASHBOARD PRINCIPAL ---
 st.markdown("<hr>", unsafe_allow_html=True)
@@ -274,14 +288,14 @@ if not df.empty:
                             'mercado': r['mercado'], 'cuota': r['cuota'], 'monto': monto_vivo, 'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                         })
                         st.toast("¡Apuesta registrada y cobrada del Bankroll!")
-                        time.sleep(1); st.rerun()
+                        time.sleep(1); st.cache_data.clear(); st.rerun()
                     else: st.error("❌ Bankroll insuficiente.")
 
                 if st.session_state['user_rol'] == 'admin':
                     c_va, c_vb, c_vc = st.columns(3)
                     if c_va.button(f"✅ Cobrar", key=f"wv_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
                     if c_vb.button(f"❌ Fallado", key=f"lv_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
-                    if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.rerun()
+                    if c_vc.button(f"🗑️ Eliminar", key=f"delv_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.cache_data.clear(); st.rerun()
         else:
             st.info("📡 Escaneando ineficiencias en directo... No hay alertas activas en este momento.")
 
@@ -321,7 +335,7 @@ if not df.empty:
                             col_sf1, col_sf2 = st.columns(2)
                             if col_sf1.form_submit_button("💾 Guardar"):
                                 db.collection('pronosticos').document(str(r['id'])).update({'cuota': n_cuota, 'ev': n_ev, 'analisis': n_ana})
-                                st.session_state[edit_key] = False; st.rerun()
+                                st.session_state[edit_key] = False; st.cache_data.clear(); st.rerun()
                             if col_sf2.form_submit_button("❌ Cancelar"): st.session_state[edit_key] = False; st.rerun()
                         st.markdown("</div>", unsafe_allow_html=True)
                     else:
@@ -365,7 +379,7 @@ if not df.empty:
                                         'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                                     })
                                     st.toast("¡Apuesta registrada y cobrada del Bankroll!")
-                                    time.sleep(1); st.rerun()
+                                    time.sleep(1); st.cache_data.clear(); st.rerun()
                                 else: st.error("❌ Bankroll insuficiente.")
                         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -374,7 +388,7 @@ if not df.empty:
                             if c_wa.button(f"✅ Ganada", key=f"w_{r['id']}"): resolver_apuesta(r['id'], 'GANADA'); st.rerun()
                             if c_wb.button(f"❌ Perdida", key=f"l_{r['id']}"): resolver_apuesta(r['id'], 'PERDIDA'); st.rerun()
                             if c_wc.button(f"✏️ Editar", key=f"edt_{r['id']}"): st.session_state[edit_key] = True; st.rerun()
-                            if c_wd.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.rerun()
+                            if c_wd.button(f"🗑️ Eliminar", key=f"del_{r['id']}"): db.collection('pronosticos').document(str(r['id'])).delete(); st.cache_data.clear(); st.rerun()
                         st.markdown("<hr style='opacity: 0.2;'>", unsafe_allow_html=True)
             else: st.info("No hay partidos para esta liga específica.")
         else: st.info("El radar de fútbol está despejado.")
@@ -424,7 +438,7 @@ if not df.empty:
                             db.collection('pronosticos').document(str(p['id'])).update({
                                 'partido': n_titulo, 'mercado': n_mercado, 'cuota': n_cuota_p, 'ev': n_ev_p, 'analisis': n_ana_p
                             })
-                            st.session_state[edit_key_p] = False; st.rerun()
+                            st.session_state[edit_key_p] = False; st.cache_data.clear(); st.rerun()
                         if col_sp2.form_submit_button("❌ Cancelar"): st.session_state[edit_key_p] = False; st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
                 else:
@@ -432,7 +446,7 @@ if not df.empty:
                         <div style='background: rgba(255, 255, 255, 0.05); padding: 20px; border-radius: 10px; border-left: 5px solid #ffcc00;'>
                             <h3 style='color: white;'>{p['partido']}</h3>
                             <p style='color: #b3cce6; white-space: pre-line;'>{p['mercado']}</p>
-                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA DE REFERENCIA: {p['cuota']} | EV+: {p['ev']}%</p>
+                            <p style='color: #00f2ff; font-weight: bold;'>CUOTA: {p['cuota']} | PROB. REAL: {p.get('prob_real', 0)}% | EV+: {p['ev']}%</p>
                             <p style='font-size: 0.95rem; color: white; white-space: pre-line;'>{p.get('analisis','')}</p>
                         </div>
                     """, unsafe_allow_html=True)
@@ -469,7 +483,7 @@ if not df.empty:
                                     'fecha': datetime.now(), 'estatus': 'PENDIENTE'
                                 })
                                 st.toast("¡Ticket Dorado registrado y cobrado del Bankroll!")
-                                time.sleep(1); st.rerun()
+                                time.sleep(1); st.cache_data.clear(); st.rerun()
                             else: st.error("❌ Bankroll insuficiente.")
                     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -478,8 +492,8 @@ if not df.empty:
                         if c_pa.button(f"✅ Cobrar", key=f"wp_{p['id']}"): resolver_apuesta(p['id'], 'GANADA'); st.rerun()
                         if c_pb.button(f"❌ Fallado", key=f"lp_{p['id']}"): resolver_apuesta(p['id'], 'PERDIDA'); st.rerun()
                         if c_pc.button(f"✏️ Editar", key=f"edtp_{p['id']}"): st.session_state[edit_key_p] = True; st.rerun()
-                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(str(p['id'])).delete(); st.rerun()
-                    st.markdown("<br>", unsafe_allow_html=True)
+                        if c_pd.button(f"🗑️ Eliminar", key=f"delp_{p['id']}"): db.collection('pronosticos').document(str(p['id'])).delete(); st.cache_data.clear(); st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
         else: st.info("Cocinando la combinada perfecta del día...")
 
     # --- 💼 PESTAÑA PORTAFOLIO (Escudo Quasar Integrado) ---
@@ -505,7 +519,7 @@ if not df.empty:
             
             df_port_pendientes = df_port[df_port['estatus'] == 'PENDIENTE']
             inversion_total = df_port_pendientes['monto'].sum()
-            st.markdown(f"<p style='font-size: 1.2rem; color: #00f2ff;'>Total en Riesgo Activo: <b>${inversion_total:,.2f}</b></p>", unsafe_allow_html=True)
+            st.markdown(f"<div style='background: rgba(0, 242, 255, 0.1); padding: 15px; border-radius: 8px; border: 1px solid #00f2ff; margin-bottom: 20px;'><h4 style='color: #00f2ff; margin: 0;'>Total en Riesgo Activo: <b style='color: white;'>${inversion_total:,.2f}</b></h4></div>", unsafe_allow_html=True)
             
             for i, r in df_port.iterrows():
                 estatus = r['estatus']
@@ -572,7 +586,7 @@ if not df.empty:
                     if st.session_state['user_rol'] == 'admin':
                         if st.button("🔄 Revertir a Pendiente", key=f"rev_{r['id']}"): 
                             db.collection('pronosticos').document(str(r['id'])).update({'estatus': 'PENDIENTE'})
-                            st.rerun()
+                            st.cache_data.clear(); st.rerun()
         else: st.info("El historial aparecerá aquí conforme se resuelvan los partidos.")
 
     # --- ⚙️ PESTAÑA PERFIL Y HERRAMIENTAS VIP ---
@@ -582,8 +596,9 @@ if not df.empty:
         col_u1, col_u2 = st.columns([2, 1])
         nuevo_bank = col_u1.number_input("Capital Actual (Bankroll Fijo):", value=float(bank_actual), step=50.0)
         if col_u2.button("💾 GUARDAR CAMBIOS", use_container_width=True):
-            user_ref.update({'bankroll': nuevo_bank})
-            st.success("¡Datos sincronizados con éxito!"); time.sleep(1); st.rerun()
+            db.collection('usuarios').document(st.session_state['user_email']).update({'bankroll': nuevo_bank})
+            st.success("¡Datos sincronizados con éxito!")
+            time.sleep(1); st.cache_data.clear(); st.rerun()
             
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown("### 🧮 CALCULADORAS MATEMÁTICAS Y PROYECCIÓN VIP")
